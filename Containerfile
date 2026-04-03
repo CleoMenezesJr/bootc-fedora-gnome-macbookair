@@ -150,18 +150,13 @@ systemctl enable powertop.service
 echo "▸ Cleaning up build artifacts"
 rm -rvf /tmp/kmods
 dnf5 clean all
-rm -rfv /var/cache/* \
-        /var/log/* \
-        /var/tmp/*
+# Avoid touching /var directly (bootc limitation)
 SYSCONFIG
 
 # ── Install GNOME Shell (minimal, no weak deps) ──
 RUN echo "▸ Installing GNOME Shell (minimal)" && \
     dnf5 install gnome-shell --setopt=install_weak_deps=False -y && \
-    dnf5 clean all && \
-    rm -rfv /var/cache/* \
-            /var/log/* \
-            /var/tmp/*
+    dnf5 clean all
 
 # ── Install RPM packages from list & configure services ──
 RUN <<PACKAGES
@@ -191,11 +186,7 @@ systemctl enable macbook-lighter.service
 echo "▸ Final cleanup"
 rm -rvf packages.rpm
 dnf5 clean all
-rm -rfv /var/cache/* \
-        /var/log/* \
-        /var/tmp/* \
-        /var/usrlocal/share/applications/mimeinfo.cache \
-        /var/roothome/.*
+rm -rfv /var/usrlocal/share/applications/mimeinfo.cache
 PACKAGES
 
 # ── Lint the final image ──
