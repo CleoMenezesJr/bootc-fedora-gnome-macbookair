@@ -185,6 +185,15 @@ install -Dm755 src/macbook-lighter-kbd.sh /usr/bin/macbook-lighter-kbd
 cd /
 rm -rf /tmp/macbook-lighter
 
+# ── Install weather-oclock extension from source (CleoMenezesJr) ──
+echo "▸ Installing weather-oclock extension from source"
+git clone --depth 1 https://github.com/CleoMenezesJr/weather-oclock.git /tmp/weather-oclock
+cd /tmp/weather-oclock
+# Build and install system-wide (/usr/share/gnome-shell/extensions)
+make install DESTDIR=/
+cd /
+rm -rf /tmp/weather-oclock
+
 echo "▸ Configuring systemd services"
 systemctl mask systemd-remount-fs.service
 systemctl enable zram-swap.service
