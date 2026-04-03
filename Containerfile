@@ -101,6 +101,11 @@ echo "▸ Regenerating initramfs"
 kver="$(rpm -q kernel-core --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')"
 dracut -f "/usr/lib/modules/${kver}/initramfs.img" "${kver}"
 
+# ── RPMFusion for broadcom-wl runtime dependencies ──
+FEDORA_RELEASE="$(rpm -E '%fedora')"
+dnf5 -y install \
+    "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_RELEASE}.noarch.rpm"
+
 # ── Install pre-built kernel modules ──
 echo "▸ Installing Broadcom WiFi kernel module (kmod-wl)"
 dnf5 -y install /tmp/kmods/kmod-wl-*.rpm
@@ -108,11 +113,6 @@ dnf5 -y install /tmp/kmods/kmod-wl-*.rpm
 echo "▸ Installing FaceTimeHD camera kernel module (kmod-facetimehd)"
 dnf5 -y install /tmp/kmods/kmod-facetimehd-*.rpm || \
     rpm -ivh --nodeps /tmp/kmods/kmod-facetimehd-*.rpm
-
-# ── RPMFusion for broadcom-wl runtime dependencies ──
-FEDORA_RELEASE="$(rpm -E '%fedora')"
-dnf5 -y install \
-    "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_RELEASE}.noarch.rpm"
 
 # ── Writable directories (bootc best practice) ──
 # See: https://bootc-dev.github.io/bootc/building/guidance.html
