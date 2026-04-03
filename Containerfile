@@ -102,8 +102,9 @@ kver="$(rpm -q kernel-core --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')"
 dracut -f "/usr/lib/modules/${kver}/initramfs.img" "${kver}"
 
 # ── Kernel Arguments: ACPI OSI hacks for MacBook hardware ──
-# Some firmwares unlock features only when they "see" Darwin or Windows.
-bootc kargs --append 'acpi_osi="!Darwin"' --append 'acpi_osi="!Windows 2012"'
+# Declaring kernel arguments via bootc-native configuration files.
+mkdir -p /usr/lib/bootc/kargs.d/
+echo 'kargs = ["acpi_osi=\"!Darwin\"", "acpi_osi=\"!Windows 2012\""]' > /usr/lib/bootc/kargs.d/10-macbook.toml
 
 # ── RPMFusion for broadcom-wl runtime dependencies ──
 FEDORA_RELEASE="$(rpm -E '%fedora')"
