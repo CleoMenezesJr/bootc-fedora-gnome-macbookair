@@ -168,7 +168,7 @@ RUN <<PACKAGES
 set -euo pipefail
 
 echo "▸ Installing RPM packages from packages.rpm"
-tr '\n' ' ' < packages.rpm | sed 's/#[^"]*//g' | xargs dnf5 install -y
+grep -v '^\s*#' packages.rpm | grep -v '^\s*$' | xargs dnf5 install -y
 
 # ── Install macbook-lighter (ambient light sensor control) ──
 echo "▸ Installing macbook-lighter from source"
