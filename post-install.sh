@@ -1,5 +1,5 @@
 #!/bin/bash
-# First-login bootstrap: installs Flatpak applications as --user.
+# First-login bootstrap: installs Flatpak applications and GNOME extensions as --user.
 # Runs once per user via a systemd user service (post-install.service).
 set -euo pipefail
 
@@ -39,6 +39,14 @@ flatpak install --user --noninteractive flathub \
     org.mozilla.firefox \
     org.telegram.desktop \
     page.tesk.Refine
+
+echo "Installing weather-oclock extension…"
+git clone --depth 1 https://github.com/CleoMenezesJr/weather-oclock.git /tmp/weather-oclock
+pushd /tmp/weather-oclock > /dev/null
+make install
+gnome-extensions enable weather-oclock@cleomenezesjr.github.com || true
+popd > /dev/null
+rm -rf /tmp/weather-oclock
 
 # Mark as completed so this service won't run again
 mkdir -p "$(dirname "$FLAG")"
