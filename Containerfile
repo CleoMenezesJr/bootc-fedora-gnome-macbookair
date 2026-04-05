@@ -11,6 +11,7 @@ FROM quay.io/fedora/fedora-bootc:44 AS builder
 
 RUN <<BUILDER
 set -euo pipefail
+echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 echo "▸ Upgrading kernel packages"
 dnf5 upgrade -y 'kernel*' --refresh
@@ -48,13 +49,16 @@ dnf5 -y install "akmod-facetimehd-*.fc${FEDORA_RELEASE}.${ARCH}" || \
     dnf5 -y install akmod-facetimehd facetimehd-kmod-common
 akmods --force --kernels "${KERNEL_VERSION}" --kmod facetimehd
 
+# Cleanup builder cache for this layer
+dnf5 clean all && rm -rf /var/cache/libdnf5 /var/lib/dnf
+
 # ── Build FaceTimeHD firmware ──
 echo "▸ Building FaceTimeHD firmware from source"
 git clone --depth 1 https://github.com/patjak/facetimehd-firmware.git /tmp/facetimehd-firmware
 cd /tmp/facetimehd-firmware && make && make install
 BUILDER
 
-# ── Build Clight, Clightd, and libmodule ──
+# ── Stage 1.1: Build Clight, Clightd, and libmodule ───────────────────────
 # Set global build environment via ENV for maximum persistence
 ENV CMAKE_PREFIX_PATH=/usr
 ENV PKG_CONFIG_PATH=/usr/lib64/pkgconfig:/usr/lib/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig:/usr/share/pkgconfig
@@ -101,6 +105,7 @@ make install
 mv clight-*.rpm /tmp/rpms/
 
 echo "▸ Builder stage complete"
+dnf5 clean all && rm -rf /var/cache/libdnf5 /var/lib/dnf
 BUILDER
 
 # ── Stage 2: Final bootable image ──────────────────────────────────────────
@@ -120,10 +125,10 @@ COPY packages.rpm post-install.sh post-install.service \
     hid-apple.conf dracut-facetimehd.conf \
     suspend-fix.service powertop.service ./
 
-
 # ── System configuration & kernel module installation ──
 RUN <<SYSCONFIG
 set -euo pipefail
+echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 echo "▸ Creating required directories"
 mkdir -vp /var/roothome /data /var/home
@@ -206,18 +211,20 @@ dnf5 clean all
 rm -rfv /var/cache/* \
         /var/log/* \
         /var/tmp/* \
-        /var/lib/dnf/*
+        /var/lib/dnf/* \
+        /var/cache/libdnf5/*
 SYSCONFIG
 
-# ── Install GNOME Shell (minimal, no weak deps) ──
+# ── Stage 2.1: Install GNOME Shell (minimal, no weak deps) ──────────────────
 RUN echo "▸ Installing GNOME Shell (minimal)" && \
     dnf5 install gnome-shell --setopt=install_weak_deps=False -y && \
     dnf5 clean all && \
     rm -rfv /var/cache/* \
     /var/log/* \
-    /var/tmp/*
+    /var/tmp/* \
+    /var/cache/libdnf5/* /var/lib/dnf/*
 
-# ── Install RPM packages from list & configure services ──
+# ── Stage 2.2: Install RPM packages from list & configure services ──────────
 RUN <<PACKAGES
 set -euo pipefail
 
@@ -262,7 +269,7 @@ dnf5 clean all
 rm -rfv /var/cache/* \
         /var/log/* \
         /var/tmp/* \
-        /var/lib/dnf/* \
+        /var/cache/libdnf5/* \
         /var/usrlocal/share/applications/mimeinfo.cache \
         /var/roothome/.*
 # Final check for /usr/etc
