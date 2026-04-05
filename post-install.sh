@@ -43,7 +43,6 @@ echo "Installing weather-oclock extension…"
 git clone --depth 1 https://github.com/CleoMenezesJr/weather-oclock.git /tmp/weather-oclock
 pushd /tmp/weather-oclock > /dev/null
 make install
-gnome-extensions enable weather-oclock@cleomenezesjr.github.com || true
 popd > /dev/null
 rm -rf /tmp/weather-oclock
 

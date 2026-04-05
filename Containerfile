@@ -215,6 +215,19 @@ cp -v mbpfan.service /usr/lib/systemd/system/mbpfan.service
 cd /
 rm -rf /tmp/mbpfan
 
+# ── GNOME system defaults via dconf ──
+echo "▸ Configuring GNOME system defaults"
+mkdir -p /etc/dconf/db/local.d /etc/dconf/profile
+cat > /etc/dconf/profile/user <<'DCONF_PROFILE'
+user-db:user
+system-db:local
+DCONF_PROFILE
+cat > /etc/dconf/db/local.d/00-gnome-extensions <<'DCONF_EXTENSIONS'
+[org/gnome/shell]
+enabled-extensions=['weather-oclock@cleomenezesjr.github.com']
+DCONF_EXTENSIONS
+dconf update
+
 # ── Configuring systemd services ──
 echo "▸ Configuring systemd services"
 # Mask unnecessary services
