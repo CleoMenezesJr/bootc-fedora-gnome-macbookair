@@ -143,6 +143,12 @@ rm -rvf /opt && mkdir -vp /var/opt && ln -vs /var/opt /opt
 mkdir -vp /var/usrlocal && mv -v /usr/local/* /var/usrlocal/ 2>/dev/null || true
 rm -rvf /usr/local && ln -vs /var/usrlocal /usr/local
 
+# ── Pre-seed system users/groups at build time ──
+# Prevents systemd-sysusers from failing at boot on duplicate entries
+# left behind by RPM scriptlets (e.g. usbmuxd group in /etc/gshadow).
+echo "▸ Pre-seeding system users via systemd-sysusers"
+systemd-sysusers
+
 # ── Timezone: Santiago, Chile ──
 echo "▸ Setting timezone to America/Santiago"
 ln -sf /usr/share/zoneinfo/America/Santiago /etc/localtime
