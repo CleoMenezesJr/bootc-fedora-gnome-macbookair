@@ -102,6 +102,17 @@ dracut -f "/usr/lib/modules/${kver}/initramfs.img" "${kver}"
 mkdir -p /usr/lib/bootc/kargs.d/
 echo 'kargs = ["acpi_osi=\"!Darwin\"", "acpi_osi=\"!Windows 2012\""]' > /usr/lib/bootc/kargs.d/10-macbook.toml
 
+# ── Kernel Arguments: Intel GPU + PCIe power savings (MacBookAir7,2 / Broadwell) ──
+# PSR: Panel Self Refresh — cuts eDP link power when framebuffer is static
+# FBC: Frame Buffer Compression — compresses framebuffer in VRAM
+# pcie_aspm=force: enables PCIe ASPM link power states
+cat > /usr/lib/bootc/kargs.d/20-macbook-power.toml <<'KARGS'
+kargs = ["i915.enable_psr=1", "i915.enable_fbc=1", "pcie_aspm=force"]
+KARGS
+
+# ── Audio power save (Intel HDA codec off when idle for 1s) ──
+echo 'options snd_hda_intel power_save=1' > /etc/modprobe.d/audio-power-save.conf
+
 # ── RPMFusion for broadcom-wl runtime dependencies ──
 FEDORA_RELEASE="$(rpm -E '%fedora')"
 dnf5 -y install \
