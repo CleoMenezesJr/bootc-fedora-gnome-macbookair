@@ -227,6 +227,7 @@ systemctl mask systemd-remount-fs.service
 systemctl enable \
     macbook-lighter.service \
     mbpfan.service \
+    power-profiles-daemon.service \
     powertop.service \
     suspend-fix.service \
     zram-swap.service
