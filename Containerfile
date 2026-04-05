@@ -11,7 +11,6 @@ FROM quay.io/fedora/fedora-bootc:44 AS builder
 
 RUN <<BUILDER
 set -euo pipefail
-echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 echo "▸ Upgrading kernel packages"
 dnf5 upgrade -y 'kernel*' --refresh
@@ -73,12 +72,11 @@ COPY --from=builder /etc/yum.repos.d/_copr_mulderje-facetimehd-kmod.repo /etc/yu
 COPY packages.rpm post-install.sh post-install.service \
     hid-apple.conf dracut-facetimehd.conf \
     90-backlight.rules 91-leds.rules \
-    suspend-fix.service powertop.service ./
+    suspend-fix.service ./
 
 # ── System configuration & kernel module installation ──
 RUN <<SYSCONFIG
 set -euo pipefail
-echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 echo "▸ Creating required directories"
 mkdir -vp /var/roothome /data /var/home
@@ -150,7 +148,6 @@ mv -v post-install.service /usr/lib/systemd/user/post-install.service
 # ── MacBook-specific systemd services ──
 echo "▸ Installing MacBook hardware services"
 mv -v suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
-mv -v powertop.service /usr/lib/systemd/system/powertop.service
 
 # ── Cleanup builder artifacts ──
 echo "▸ Cleaning up build artifacts and fixing bootc lint issues"
@@ -169,7 +166,7 @@ SYSCONFIG
 
 # ── Stage 2.1: Install GNOME Shell (minimal, no weak deps) ──────────────────
 RUN echo "▸ Installing GNOME Shell (minimal)" && \
-    dnf5 install gnome-shell --setopt=install_weak_deps=False -y && \
+    dnf5 install gnome-shell -y && \
     dnf5 clean all && \
     rm -rfv /var/cache/* \
     /var/log/* \
@@ -237,8 +234,8 @@ systemctl mask systemd-remount-fs.service
 systemctl enable \
     macbook-lighter.service \
     mbpfan.service \
-    power-profiles-daemon.service \
-    powertop.service \
+    tuned.service \
+    tuned-ppd.service \
     suspend-fix.service \
     zram-swap.service
 

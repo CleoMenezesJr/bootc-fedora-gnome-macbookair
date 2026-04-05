@@ -20,7 +20,8 @@ btrfs-assistant
 compsize
 
 # ── System utilities ───────────────────────────────────────────────
-power-profiles-daemon
+tuned
+tuned-ppd
 bc
 auditctl
 git
@@ -30,7 +31,6 @@ libva-utils
 lm_sensors
 micro
 podman
-powertop
 tree
 unzip
 usbutils
