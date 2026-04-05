@@ -68,11 +68,22 @@ COPY --from=builder /var/cache/akmods/facetimehd/kmod-facetimehd*.rpm /tmp/kmods
 COPY --from=builder /usr/lib/firmware/facetimehd/ /usr/lib/firmware/facetimehd/
 COPY --from=builder /etc/yum.repos.d/_copr_mulderje-facetimehd-kmod.repo /etc/yum.repos.d/
 
-# Copy project configuration files (local files first)
-COPY packages.rpm post-install.sh post-install.service \
-    hid-apple.conf dracut-facetimehd.conf \
-    90-backlight.rules 91-leds.rules \
-    suspend-fix.service ./
+# Copy project configuration files directly to their final destinations
+COPY packages.rpm /tmp/packages.rpm
+# First-login Flatpak bootstrap (runs as user service)
+COPY --chmod=755 post-install.sh /usr/bin/post-install.sh
+# Triggers post-install.sh on first graphical login
+COPY post-install.service /usr/lib/systemd/user/post-install.service
+# MacBook keyboard: fn key behavior, swap alt/cmd
+COPY hid-apple.conf /etc/modprobe.d/hid-apple.conf
+# Include FaceTimeHD firmware in initramfs
+COPY dracut-facetimehd.conf /etc/dracut.conf.d/facetimehd.conf
+# Allow user-writable screen backlight via udev
+COPY 90-backlight.rules /etc/udev/rules.d/90-backlight.rules
+# Allow user-writable keyboard backlight via udev
+COPY 91-leds.rules /etc/udev/rules.d/91-leds.rules
+# Disable XHC1/LID0 ACPI wakeup sources (prevents spurious wakeups)
+COPY suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
 
 # ── System configuration & kernel module installation ──
 RUN <<SYSCONFIG
@@ -90,8 +101,6 @@ tee /etc/dracut.conf.d/no-nfs.conf >/dev/null <<'NONFS'
 omit_dracutmodules+=" nfs "
 omit_drivers+=" nfs nfsv3 nfsv4 nfs_acl nfs_common sunrpc rxrpc rpcrdma auth_rpcgss rpcsec_gss_krb5 "
 NONFS
-
-mv -v dracut-facetimehd.conf /etc/dracut.conf.d/facetimehd.conf
 
 echo "▸ Regenerating initramfs"
 kver="$(rpm -q kernel-core --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')"
@@ -138,28 +147,6 @@ rm -rvf /usr/local && ln -vs /var/usrlocal /usr/local
 echo "▸ Setting timezone to America/Santiago"
 ln -sf /usr/share/zoneinfo/America/Santiago /etc/localtime
 
-# ── MacBook keyboard configuration ──
-echo "▸ Installing MacBook keyboard configuration (hid_apple)"
-mv -v hid-apple.conf /etc/modprobe.d/hid-apple.conf
-
-# ── MacBook backlight and leds udev rules ──
-echo "▸ Installing udev rules for macbook-lighter"
-mv -v 90-backlight.rules /etc/udev/rules.d/90-backlight.rules
-mv -v 91-leds.rules /etc/udev/rules.d/91-leds.rules
-
-# ── Systemd user service: user-level Flatpak bootstrap ──
-echo "▸ Installing post-install script and user service"
-mv -v post-install.sh /usr/bin/post-install.sh
-chmod +x /usr/bin/post-install.sh
-
-# Flatpaks are requested as --user, so this logic MUST trigger inside a user session.
-# Modifying this to system/ would run it as root during boot and break Flatpaks.
-mv -v post-install.service /usr/lib/systemd/user/post-install.service
-
-# ── MacBook-specific systemd services ──
-echo "▸ Installing MacBook hardware services"
-mv -v suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
-
 # ── Cleanup builder artifacts ──
 echo "▸ Cleaning up build artifacts and fixing bootc lint issues"
 rm -rvf /tmp/kmods
@@ -192,7 +179,7 @@ echo "▸ Installing RPM packages from packages.rpm"
 dnf5 -y install \
     "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
     "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
-grep -v '^\s*#' packages.rpm | grep -v '^\s*$' | xargs dnf5 install -y --refresh
+grep -v '^\s*#' /tmp/packages.rpm | grep -v '^\s*$' | xargs dnf5 install -y --refresh
 
 # ── Install macbook-lighter from source ──
 echo "▸ Installing macbook-lighter from source"
@@ -257,7 +244,7 @@ systemctl --global enable \
 
 # ── Final cleanup ──
 echo "▸ Final cleanup for bootc compliance"
-rm -rvf packages.rpm
+rm -f /tmp/packages.rpm
 dnf5 clean all
 rm -rfv /var/cache/* \
         /var/log/* \
