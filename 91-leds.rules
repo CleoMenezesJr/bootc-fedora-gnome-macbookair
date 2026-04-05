@@ -1,1 +1,1 @@
-ACTION=="add", SUBSYSTEM=="leds", KERNEL=="smc::kbd_backlight", TAG+="uaccess"
+ACTION=="add", SUBSYSTEM=="leds", KERNEL=="smc::kbd_backlight", TAG+="uaccess", ENV{UPOWER_KBD_BACKLIGHT}="1"
