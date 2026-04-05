@@ -22,6 +22,7 @@ compsize
 thermald
 tuned
 tuned-ppd
+upower
 bc
 auditctl
 git
