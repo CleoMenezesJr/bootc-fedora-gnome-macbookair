@@ -14,7 +14,6 @@ fi
 echo "Adding Flathub remote (user-level)…"
 flatpak remote-add --user --if-not-exists \
     flathub https://flathub.org/repo/flathub.flatpakrepo
-sleep 2
 
 echo "Installing Flatpak applications (user-level)…"
 flatpak install --user --noninteractive flathub \
