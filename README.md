@@ -42,7 +42,7 @@ Immutable Fedora 44 image with GNOME Shell, tailored for MacBook Air hardware. A
 - **Battery**: PowerTOP auto-tune and `libva-intel-media-driver` for hardware video decoding.
 - **Thermals**: [`mbpfan`](https://github.com/linux-on-mac/mbpfan) (built from source v2.4.0) enabled with a custom fan curve for better heat management.
 - **Kernel**: `acpi_osi` arguments for improved ACPI/Power management compatibility.
-- **Ambient Light**: [macbook-lighter](https://github.com/harttle/macbook-lighter) for automatic screen/keyboard backlight.
+- **Ambient Light**: [`Clight`](https://github.com/FedeDP/Clight) (built from source) for automatic screen/keyboard backlight with GNOME integration.
 
 ## Flatpak Applications (user-level)
 

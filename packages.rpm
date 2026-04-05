@@ -32,6 +32,9 @@ powertop
 tree
 unzip
 usbutils
+gsl
+libconfig
+popt
 zram
 zip
 

@@ -45,17 +45,60 @@ curl -LsSf -o /etc/yum.repos.d/_copr_mulderje-facetimehd-kmod.repo \
 echo "▸ Installing and building akmod-facetimehd"
 ARCH="$(rpm -E '%_arch')"
 dnf5 -y install "akmod-facetimehd-*.fc${FEDORA_RELEASE}.${ARCH}" || \
-    dnf5 -y install akmod-facetimehd
+    dnf5 -y install akmod-facetimehd facetimehd-kmod-common
 akmods --force --kernels "${KERNEL_VERSION}" --kmod facetimehd
 
 # ── Build FaceTimeHD firmware ──
 echo "▸ Building FaceTimeHD firmware from source"
 git clone --depth 1 https://github.com/patjak/facetimehd-firmware.git /tmp/facetimehd-firmware
-cd /tmp/facetimehd-firmware
-make
+cd /tmp/facetimehd-firmware && make && make install
+BUILDER
+
+# ── Build Clight, Clightd, and libmodule ──
+# Set global build environment via ENV for maximum persistence
+ENV CMAKE_PREFIX_PATH=/usr
+ENV PKG_CONFIG_PATH=/usr/lib64/pkgconfig:/usr/lib/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig:/usr/share/pkgconfig
+ENV LD_LIBRARY_PATH=/usr/lib64:/usr/lib:/usr/local/lib64:/usr/local/lib
+
+RUN <<BUILDER
+set -euo pipefail
+
+echo "▸ Installing build dependencies for Clight"
+# Using @development-tools and specific devel packages as per official wiki
+dnf5 -y install @development-tools
+dnf5 -y install cmake gcc-c++ systemd-devel popt-devel libconfig-devel gsl-devel dbus-devel glib2-devel libcurl-devel libjpeg-turbo-devel polkit-devel pciutils-devel libiio-devel
+
+# Create directory for built RPMs
+mkdir -p /tmp/rpms
+
+echo "▸ Building libmodule (v5.0.2 RPM)"
+git clone --depth 1 --branch 5.0.2 https://github.com/FedeDP/libmodule.git /tmp/libmodule
+cd /tmp/libmodule && mkdir build && cd build
+cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_SYSCONFDIR=/etc -DCMAKE_BUILD_TYPE="Release" ..
+make && cpack -G RPM
 make install
-cd /
-rm -rf /tmp/facetimehd-firmware
+mv libmodule-*.rpm /tmp/rpms/
+# Install locally so Clightd can build against it
+dnf5 -y install /tmp/rpms/libmodule-*.rpm
+
+echo "▸ Building Clightd (RPM)"
+git clone --depth 1 https://github.com/FedeDP/Clightd.git /tmp/clightd
+cd /tmp/clightd && mkdir build && cd build
+# Disable ORC, Gamma, and DPMS as they might conflict with pure GNOME
+cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_SYSCONFDIR=/etc -DCMAKE_BUILD_TYPE="Release" -DENABLE_GAMMACONTROL=OFF -DENABLE_DPMS=OFF ..
+make && cpack -G RPM
+make install
+mv clightd-*.rpm /tmp/rpms/
+# Install locally so Clight can build against it
+dnf5 -y install /tmp/rpms/clightd-*.rpm
+
+echo "▸ Building Clight (RPM)"
+git clone --depth 1 https://github.com/FedeDP/Clight.git /tmp/clight
+cd /tmp/clight && mkdir build && cd build
+cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_SYSCONFDIR=/etc -DCMAKE_BUILD_TYPE="Release" ..
+make && cpack -G RPM
+make install
+mv clight-*.rpm /tmp/rpms/
 
 echo "▸ Builder stage complete"
 BUILDER
@@ -63,17 +106,20 @@ BUILDER
 # ── Stage 2: Final bootable image ──────────────────────────────────────────
 FROM quay.io/fedora/fedora-bootc:44
 
-# Copy pre-built kernel module RPMs from builder
+# Copy pre-built kernel module RPMs and Clight RPMs from builder
 COPY --from=builder /var/cache/akmods/wl/kmod-wl*.rpm /tmp/kmods/
 COPY --from=builder /var/cache/akmods/facetimehd/kmod-facetimehd*.rpm /tmp/kmods/
+COPY --from=builder /tmp/rpms/*.rpm /tmp/rpms/
 
-# Copy FaceTimeHD firmware from builder
+# Copy FaceTimeHD firmware and repo config from builder
 COPY --from=builder /usr/lib/firmware/facetimehd/ /usr/lib/firmware/facetimehd/
+COPY --from=builder /etc/yum.repos.d/_copr_mulderje-facetimehd-kmod.repo /etc/yum.repos.d/
 
-# Copy project configuration files
+# Copy project configuration files (local files first)
 COPY packages.rpm post-install.sh post-install.service \
-     hid-apple.conf dracut-facetimehd.conf \
-     suspend-fix.service powertop.service ./
+    hid-apple.conf dracut-facetimehd.conf \
+    suspend-fix.service powertop.service ./
+
 
 # ── System configuration & kernel module installation ──
 RUN <<SYSCONFIG
@@ -113,6 +159,7 @@ echo "▸ Installing Broadcom WiFi kernel module (kmod-wl)"
 dnf5 -y install /tmp/kmods/kmod-wl-*.rpm
 
 echo "▸ Installing FaceTimeHD camera kernel module (kmod-facetimehd)"
+dnf5 -y install facetimehd-kmod-common
 dnf5 -y install /tmp/kmods/kmod-facetimehd-*.rpm || \
     rpm -ivh --nodeps /tmp/kmods/kmod-facetimehd-*.rpm
 
@@ -140,23 +187,26 @@ chmod +x /usr/bin/post-install.sh
 # Modifying this to system/ would run it as root during boot and break Flatpaks.
 mv -v post-install.service /usr/lib/systemd/user/post-install.service
 
-# Enable globally for all users executing a graphical session
-systemctl --global enable post-install.service
+echo "▸ Installing locally built Clight, Clightd, and libmodule RPMs"
+dnf5 -y install /tmp/rpms/*.rpm
 
 # ── MacBook-specific systemd services ──
 echo "▸ Installing MacBook hardware services"
 mv -v suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
 mv -v powertop.service /usr/lib/systemd/system/powertop.service
-systemctl enable suspend-fix.service
-systemctl enable powertop.service
 
 # ── Cleanup builder artifacts ──
-echo "▸ Cleaning up build artifacts"
+echo "▸ Cleaning up build artifacts and fixing bootc lint issues"
 rm -rvf /tmp/kmods
+# Force remove /usr/etc if any build process created it
+rm -rvf /usr/etc
+# Clear /boot as it's populated at runtime by bootc
+rm -rvf /boot/*
 dnf5 clean all
 rm -rfv /var/cache/* \
         /var/log/* \
-        /var/tmp/*
+        /var/tmp/* \
+        /var/lib/dnf/*
 SYSCONFIG
 
 # ── Install GNOME Shell (minimal, no weak deps) ──
@@ -164,8 +214,8 @@ RUN echo "▸ Installing GNOME Shell (minimal)" && \
     dnf5 install gnome-shell --setopt=install_weak_deps=False -y && \
     dnf5 clean all && \
     rm -rfv /var/cache/* \
-            /var/log/* \
-            /var/tmp/*
+    /var/log/* \
+    /var/tmp/*
 
 # ── Install RPM packages from list & configure services ──
 RUN <<PACKAGES
@@ -176,18 +226,6 @@ dnf5 -y install \
     "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
     "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
 grep -v '^\s*#' packages.rpm | grep -v '^\s*$' | xargs dnf5 install -y --refresh
-
-# ── Install macbook-lighter (ambient light sensor control) ──
-echo "▸ Installing macbook-lighter from source"
-git clone --depth 1 https://github.com/harttle/macbook-lighter.git /tmp/macbook-lighter
-cd /tmp/macbook-lighter
-install -Dm644 macbook-lighter.conf /etc/macbook-lighter.conf
-install -Dm644 macbook-lighter.service /usr/lib/systemd/system/macbook-lighter.service
-install -Dm755 src/macbook-lighter-ambient.sh /usr/bin/macbook-lighter-ambient
-install -Dm755 src/macbook-lighter-screen.sh /usr/bin/macbook-lighter-screen
-install -Dm755 src/macbook-lighter-kbd.sh /usr/bin/macbook-lighter-kbd
-cd /
-rm -rf /tmp/macbook-lighter
 
 # ── Install mbpfan v2.4.0 from source (missing in Fedora 44 repos) ──
 echo "▸ Installing mbpfan v2.4.0 from source"
@@ -200,20 +238,35 @@ cp -v mbpfan.service /usr/lib/systemd/system/mbpfan.service
 cd /
 rm -rf /tmp/mbpfan
 
+# ── Configuring systemd services ──
 echo "▸ Configuring systemd services"
+# Mask unnecessary services
 systemctl mask systemd-remount-fs.service
-systemctl enable zram-swap.service
-systemctl enable macbook-lighter.service
-systemctl enable mbpfan.service
 
-echo "▸ Final cleanup"
+# Enable system-wide hardware services
+systemctl enable \
+    clightd.service \
+    mbpfan.service \
+    powertop.service \
+    suspend-fix.service \
+    zram-swap.service
+
+# Enable user-level bootstrap services globally for all graphical sessions
+systemctl --global enable \
+    post-install.service
+
+# ── Final cleanup ──
+echo "▸ Final cleanup for bootc compliance"
 rm -rvf packages.rpm
 dnf5 clean all
 rm -rfv /var/cache/* \
         /var/log/* \
         /var/tmp/* \
+        /var/lib/dnf/* \
         /var/usrlocal/share/applications/mimeinfo.cache \
         /var/roothome/.*
+# Final check for /usr/etc
+rm -rvf /usr/etc
 PACKAGES
 
 # ── Lint the final image ──
