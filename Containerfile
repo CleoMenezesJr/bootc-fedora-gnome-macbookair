@@ -198,6 +198,12 @@ install -Dm644 macbook-lighter.conf /etc/macbook-lighter.conf
 echo "▸ Installing macbook-lighter systemd service"
 install -Dm644 macbook-lighter.service /usr/lib/systemd/system/macbook-lighter.service
 
+echo "▸ Installing macbook-lighter GNOME extension"
+EXT_UUID="macbook-lighter@cleomenezesjr.github.io"
+EXT_DEST="/usr/share/gnome-shell/extensions/${EXT_UUID}"
+mkdir -p "${EXT_DEST}"
+cp -r "gnome-extension/${EXT_UUID}/." "${EXT_DEST}/"
+
 cd / && rm -rf /tmp/macbook-lighter
 
 # ── Install mbpfan v2.4.0 from source (missing in Fedora 44 repos) ──
@@ -220,7 +226,7 @@ system-db:local
 DCONF_PROFILE
 cat > /etc/dconf/db/local.d/00-gnome-extensions <<'DCONF_EXTENSIONS'
 [org/gnome/shell]
-enabled-extensions=['weather-oclock@cleomenezesjr.github.com']
+enabled-extensions=['weather-oclock@cleomenezesjr.github.com', 'macbook-lighter@cleomenezesjr.github.io']
 DCONF_EXTENSIONS
 dconf update
 
