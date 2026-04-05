@@ -123,6 +123,7 @@ COPY --from=builder /etc/yum.repos.d/_copr_mulderje-facetimehd-kmod.repo /etc/yu
 # Copy project configuration files (local files first)
 COPY packages.rpm post-install.sh post-install.service \
     hid-apple.conf dracut-facetimehd.conf \
+    clight.conf clightd.conf \
     suspend-fix.service powertop.service ./
 
 # ── System configuration & kernel module installation ──
@@ -131,7 +132,7 @@ set -euo pipefail
 echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 echo "▸ Creating required directories"
-mkdir -vp /var/roothome /data /var/home
+mkdir -vp /var/roothome /data /var/home /etc/clight
 
 echo "▸ Installing kernel-modules-extra for broader hardware support"
 dnf5 -y install kernel-modules-extra --refresh
@@ -182,6 +183,11 @@ ln -sf /usr/share/zoneinfo/America/Santiago /etc/localtime
 # ── MacBook keyboard configuration ──
 echo "▸ Installing MacBook keyboard configuration (hid_apple)"
 mv -v hid-apple.conf /etc/modprobe.d/hid-apple.conf
+
+# ── Clight/Clightd Configuration ──
+echo "▸ Configuring Clight and Clightd"
+mv -v clight.conf /etc/clight/clight.conf
+mv -v clightd.conf /etc/clightd.conf
 
 # ── Systemd user service: user-level Flatpak bootstrap ──
 echo "▸ Installing post-install script and user service"
@@ -260,6 +266,7 @@ systemctl enable \
 
 # Enable user-level bootstrap services globally for all graphical sessions
 systemctl --global enable \
+    clight.service \
     post-install.service
 
 # ── Final cleanup ──
