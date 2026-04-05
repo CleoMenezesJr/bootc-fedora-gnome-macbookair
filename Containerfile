@@ -77,10 +77,6 @@ install -Dm644 macbook-lighter.conf /etc/macbook-lighter.conf
 echo "▸ Installing macbook-lighter systemd service"
 install -Dm644 macbook-lighter.service /usr/lib/systemd/system/macbook-lighter.service
 
-echo "▸ Installing udev rules"
-install -Dm644 udev/90-backlight.rules /etc/udev/rules.d/90-backlight.rules
-install -Dm644 udev/91-leds.rules /etc/udev/rules.d/91-leds.rules
-
 BUILDER
 
 # ── Stage 2: Final bootable image ──────────────────────────────────────────
@@ -97,6 +93,7 @@ COPY --from=builder /etc/yum.repos.d/_copr_mulderje-facetimehd-kmod.repo /etc/yu
 # Copy project configuration files (local files first)
 COPY packages.rpm post-install.sh post-install.service \
     hid-apple.conf dracut-facetimehd.conf \
+    90-backlight.rules 91-leds.rules \
     suspend-fix.service powertop.service ./
 
 # ── System configuration & kernel module installation ──
@@ -156,6 +153,11 @@ ln -sf /usr/share/zoneinfo/America/Santiago /etc/localtime
 # ── MacBook keyboard configuration ──
 echo "▸ Installing MacBook keyboard configuration (hid_apple)"
 mv -v hid-apple.conf /etc/modprobe.d/hid-apple.conf
+
+# ── MacBook backlight and leds udev rules ──
+echo "▸ Installing udev rules for macbook-lighter"
+mv -v 90-backlight.rules /etc/udev/rules.d/90-backlight.rules
+mv -v 91-leds.rules /etc/udev/rules.d/91-leds.rules
 
 # ── Systemd user service: user-level Flatpak bootstrap ──
 echo "▸ Installing post-install script and user service"
