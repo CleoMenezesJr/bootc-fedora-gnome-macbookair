@@ -58,63 +58,37 @@ git clone --depth 1 https://github.com/patjak/facetimehd-firmware.git /tmp/facet
 cd /tmp/facetimehd-firmware && make && make install
 BUILDER
 
-# ── Stage 1.1: Build Clight, Clightd, and libmodule ───────────────────────
-# Set global build environment via ENV for maximum persistence
-ENV CMAKE_PREFIX_PATH=/usr
-ENV PKG_CONFIG_PATH=/usr/lib64/pkgconfig:/usr/lib/pkgconfig:/usr/local/lib64/pkgconfig:/usr/local/lib/pkgconfig:/usr/share/pkgconfig
-ENV LD_LIBRARY_PATH=/usr/lib64:/usr/lib:/usr/local/lib64:/usr/local/lib
-
+# ── Stage 1.1: Install macbook-lighter ────────────────────────────────────
 RUN <<BUILDER
 set -euo pipefail
 
-echo "▸ Installing build dependencies for Clight"
-# Using @development-tools and specific devel packages as per official wiki
-dnf5 -y install @development-tools
-dnf5 -y install cmake gcc-c++ systemd-devel popt-devel libconfig-devel gsl-devel dbus-devel glib2-devel libcurl-devel libjpeg-turbo-devel polkit-devel pciutils-devel libiio-devel
+echo "▸ Cloning macbook-lighter from source"
+git clone --depth 1 https://github.com/CleoMenezesJr/macbook-lighter.git /tmp/macbook-lighter
+cd /tmp/macbook-lighter
 
-# Create directory for built RPMs
-mkdir -p /tmp/rpms
+echo "▸ Installing macbook-lighter scripts"
+install -Dm755 src/macbook-lighter-ambient.sh /usr/bin/macbook-lighter-ambient
+install -Dm755 src/macbook-lighter-screen.sh /usr/bin/macbook-lighter-screen
+install -Dm755 src/macbook-lighter-kbd.sh /usr/bin/macbook-lighter-kbd
 
-echo "▸ Building libmodule (v5.0.2 RPM)"
-git clone --depth 1 --branch 5.0.2 https://github.com/FedeDP/libmodule.git /tmp/libmodule
-cd /tmp/libmodule && mkdir build && cd build
-cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_SYSCONFDIR=/etc -DCMAKE_BUILD_TYPE="Release" ..
-make && cpack -G RPM
-make install
-mv libmodule-*.rpm /tmp/rpms/
-# Install locally so Clightd can build against it
-dnf5 -y install /tmp/rpms/libmodule-*.rpm
+echo "▸ Installing macbook-lighter configuration"
+install -Dm644 macbook-lighter.conf /etc/macbook-lighter.conf
 
-echo "▸ Building Clightd (RPM)"
-git clone --depth 1 https://github.com/FedeDP/Clightd.git /tmp/clightd
-cd /tmp/clightd && mkdir build && cd build
-# Disable ORC, Gamma, and DPMS as they might conflict with pure GNOME
-cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_SYSCONFDIR=/etc -DCMAKE_BUILD_TYPE="Release" -DENABLE_GAMMACONTROL=OFF -DENABLE_DPMS=OFF ..
-make && cpack -G RPM
-make install
-mv clightd-*.rpm /tmp/rpms/
-# Install locally so Clight can build against it
-dnf5 -y install /tmp/rpms/clightd-*.rpm
+echo "▸ Installing macbook-lighter systemd service"
+install -Dm644 macbook-lighter.service /usr/lib/systemd/system/macbook-lighter.service
 
-echo "▸ Building Clight (RPM)"
-git clone --depth 1 https://github.com/FedeDP/Clight.git /tmp/clight
-cd /tmp/clight && mkdir build && cd build
-cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_SYSCONFDIR=/etc -DCMAKE_BUILD_TYPE="Release" ..
-make && cpack -G RPM
-make install
-mv clight-*.rpm /tmp/rpms/
+echo "▸ Installing udev rules"
+install -Dm644 udev/90-backlight.rules /etc/udev/rules.d/90-backlight.rules
+install -Dm644 udev/91-leds.rules /etc/udev/rules.d/91-leds.rules
 
-echo "▸ Builder stage complete"
-dnf5 clean all && rm -rf /var/cache/libdnf5 /var/lib/dnf
 BUILDER
 
 # ── Stage 2: Final bootable image ──────────────────────────────────────────
 FROM quay.io/fedora/fedora-bootc:44
 
-# Copy pre-built kernel module RPMs and Clight RPMs from builder
+# Copy pre-built kernel module RPMs from builder
 COPY --from=builder /var/cache/akmods/wl/kmod-wl*.rpm /tmp/kmods/
 COPY --from=builder /var/cache/akmods/facetimehd/kmod-facetimehd*.rpm /tmp/kmods/
-COPY --from=builder /tmp/rpms/*.rpm /tmp/rpms/
 
 # Copy FaceTimeHD firmware and repo config from builder
 COPY --from=builder /usr/lib/firmware/facetimehd/ /usr/lib/firmware/facetimehd/
@@ -123,7 +97,6 @@ COPY --from=builder /etc/yum.repos.d/_copr_mulderje-facetimehd-kmod.repo /etc/yu
 # Copy project configuration files (local files first)
 COPY packages.rpm post-install.sh post-install.service \
     hid-apple.conf dracut-facetimehd.conf \
-    clight.conf clightd.conf \
     suspend-fix.service powertop.service ./
 
 # ── System configuration & kernel module installation ──
@@ -132,7 +105,7 @@ set -euo pipefail
 echo "install_weak_deps=False" >> /etc/dnf/dnf.conf
 
 echo "▸ Creating required directories"
-mkdir -vp /var/roothome /data /var/home /etc/clight
+mkdir -vp /var/roothome /data /var/home
 
 echo "▸ Installing kernel-modules-extra for broader hardware support"
 dnf5 -y install kernel-modules-extra --refresh
@@ -184,11 +157,6 @@ ln -sf /usr/share/zoneinfo/America/Santiago /etc/localtime
 echo "▸ Installing MacBook keyboard configuration (hid_apple)"
 mv -v hid-apple.conf /etc/modprobe.d/hid-apple.conf
 
-# ── Clight/Clightd Configuration ──
-echo "▸ Configuring Clight and Clightd"
-mv -v clight.conf /etc/clight/clight.conf
-mv -v clightd.conf /etc/clightd.conf
-
 # ── Systemd user service: user-level Flatpak bootstrap ──
 echo "▸ Installing post-install script and user service"
 mv -v post-install.sh /usr/bin/post-install.sh
@@ -197,9 +165,6 @@ chmod +x /usr/bin/post-install.sh
 # Flatpaks are requested as --user, so this logic MUST trigger inside a user session.
 # Modifying this to system/ would run it as root during boot and break Flatpaks.
 mv -v post-install.service /usr/lib/systemd/user/post-install.service
-
-echo "▸ Installing locally built Clight, Clightd, and libmodule RPMs"
-dnf5 -y install /tmp/rpms/*.rpm
 
 # ── MacBook-specific systemd services ──
 echo "▸ Installing MacBook hardware services"
@@ -258,7 +223,7 @@ systemctl mask systemd-remount-fs.service
 
 # Enable system-wide hardware services
 systemctl enable \
-    clightd.service \
+    macbook-lighter.service \
     mbpfan.service \
     powertop.service \
     suspend-fix.service \
@@ -266,7 +231,6 @@ systemctl enable \
 
 # Enable user-level bootstrap services globally for all graphical sessions
 systemctl --global enable \
-    clight.service \
     post-install.service
 
 # ── Final cleanup ──

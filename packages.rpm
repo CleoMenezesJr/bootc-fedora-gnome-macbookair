@@ -20,6 +20,7 @@ btrfs-assistant
 compsize
 
 # ── System utilities ───────────────────────────────────────────────
+bc
 auditctl
 git
 libva-intel-media-driver
