@@ -58,27 +58,6 @@ git clone --depth 1 https://github.com/patjak/facetimehd-firmware.git /tmp/facet
 cd /tmp/facetimehd-firmware && make && make install
 BUILDER
 
-# ── Stage 1.1: Install macbook-lighter ────────────────────────────────────
-RUN <<BUILDER
-set -euo pipefail
-
-echo "▸ Cloning macbook-lighter from source"
-git clone --depth 1 https://github.com/CleoMenezesJr/macbook-lighter.git /tmp/macbook-lighter
-cd /tmp/macbook-lighter
-
-echo "▸ Installing macbook-lighter scripts"
-install -Dm755 src/macbook-lighter-ambient.sh /usr/bin/macbook-lighter-ambient
-install -Dm755 src/macbook-lighter-screen.sh /usr/bin/macbook-lighter-screen
-install -Dm755 src/macbook-lighter-kbd.sh /usr/bin/macbook-lighter-kbd
-
-echo "▸ Installing macbook-lighter configuration"
-install -Dm644 macbook-lighter.conf /etc/macbook-lighter.conf
-
-echo "▸ Installing macbook-lighter systemd service"
-install -Dm644 macbook-lighter.service /usr/lib/systemd/system/macbook-lighter.service
-
-BUILDER
-
 # ── Stage 2: Final bootable image ──────────────────────────────────────────
 FROM quay.io/fedora/fedora-bootc:44
 
@@ -206,6 +185,24 @@ dnf5 -y install \
     "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
     "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
 grep -v '^\s*#' packages.rpm | grep -v '^\s*$' | xargs dnf5 install -y --refresh
+
+# ── Install macbook-lighter from source ──
+echo "▸ Installing macbook-lighter from source"
+git clone --depth 1 https://github.com/CleoMenezesJr/macbook-lighter.git /tmp/macbook-lighter
+cd /tmp/macbook-lighter
+
+echo "▸ Installing macbook-lighter scripts"
+install -Dm755 src/macbook-lighter-ambient.sh /usr/bin/macbook-lighter-ambient
+install -Dm755 src/macbook-lighter-screen.sh /usr/bin/macbook-lighter-screen
+install -Dm755 src/macbook-lighter-kbd.sh /usr/bin/macbook-lighter-kbd
+
+echo "▸ Installing macbook-lighter configuration"
+install -Dm644 macbook-lighter.conf /etc/macbook-lighter.conf
+
+echo "▸ Installing macbook-lighter systemd service"
+install -Dm644 macbook-lighter.service /usr/lib/systemd/system/macbook-lighter.service
+
+cd / && rm -rf /tmp/macbook-lighter
 
 # ── Install mbpfan v2.4.0 from source (missing in Fedora 44 repos) ──
 echo "▸ Installing mbpfan v2.4.0 from source"
