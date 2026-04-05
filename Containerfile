@@ -234,6 +234,7 @@ systemctl mask systemd-remount-fs.service
 systemctl enable \
     macbook-lighter.service \
     mbpfan.service \
+    thermald.service \
     tuned.service \
     tuned-ppd.service \
     suspend-fix.service \
