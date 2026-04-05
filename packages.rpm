@@ -16,7 +16,6 @@ glycin-thumbnailer
 gnome-epub-thumbnailer
 
 # ── Btrfs management ───────────────────────────────────────────────
-btrfs-assistant
 compsize
 
 # ── System utilities ───────────────────────────────────────────────
