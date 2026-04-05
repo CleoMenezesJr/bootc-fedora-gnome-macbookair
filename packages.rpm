@@ -20,6 +20,8 @@ compsize
 
 # ── System utilities ───────────────────────────────────────────────
 thermald
+tuned
+tuned-ppd
 bc
 auditctl
 git
