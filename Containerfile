@@ -284,10 +284,11 @@ systemd-sysusers
 echo "▸ Configuring nss-altfiles"
 getent passwd | awk -F: '$3 < 1000 { print }' > /usr/lib/passwd
 getent group  | awk -F: '$3 < 1000 { print }' > /usr/lib/group
-# altfiles is consulted before files so system users are resolved from /usr
+# files is consulted first so runtime group memberships (e.g. wheel) take priority;
+# altfiles is a fallback for system users/groups stored in /usr/lib
 sed -i \
-    -e 's/^passwd:.*/passwd: altfiles files systemd/' \
-    -e 's/^group:.*/group:  altfiles files systemd/' \
+    -e 's/^passwd:.*/passwd: files altfiles systemd/' \
+    -e 's/^group:.*/group:  files altfiles systemd/' \
     /etc/nsswitch.conf
 
 
