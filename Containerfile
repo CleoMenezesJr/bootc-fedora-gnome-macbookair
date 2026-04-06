@@ -268,29 +268,6 @@ systemctl enable \
 systemctl --global enable \
     post-install.service
 
-# ── Pre-seed system users/groups at build time ──
-# Must run AFTER all packages so every sysusers.d entry is covered.
-# grpconv/pwconv ensure group and shadow files are consistent before sysusers runs.
-echo "▸ Pre-seeding system users via systemd-sysusers"
-dnf5 -y install nss-altfiles
-grpconv && pwconv
-systemd-sysusers
-
-# ── nss-altfiles: move system users/groups into /usr ──
-# System users/groups (uid/gid < 1000) are stored in /usr/lib/passwd and
-# /usr/lib/group, which live in the read-only /usr layer and are NOT subject
-# to bootc's 3-way merge of /etc. This prevents UID/GID drift and eliminates
-# /etc/group vs /etc/gshadow inconsistencies across image updates.
-echo "▸ Configuring nss-altfiles"
-getent passwd | awk -F: '$3 < 1000 { print }' > /usr/lib/passwd
-getent group  | awk -F: '$3 < 1000 { print }' > /usr/lib/group
-# files is consulted first so runtime group memberships (e.g. wheel) take priority;
-# altfiles is a fallback for system users/groups stored in /usr/lib
-sed -i \
-    -e 's/^passwd:.*/passwd: files altfiles systemd/' \
-    -e 's/^group:.*/group:  files altfiles systemd/' \
-    /etc/nsswitch.conf
-
 
 # ── Final cleanup ──
 echo "▸ Final cleanup for bootc compliance"
