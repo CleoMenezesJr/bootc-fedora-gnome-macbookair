@@ -116,7 +116,7 @@ echo 'kargs = ["acpi_osi=\"!Darwin\"", "acpi_osi=\"!Windows 2012\""]' > /usr/lib
 # FBC: Frame Buffer Compression — compresses framebuffer in VRAM
 # pcie_aspm=force: enables PCIe ASPM link power states
 cat > /usr/lib/bootc/kargs.d/20-macbook-power.toml <<'KARGS'
-kargs = ["i915.enable_psr=1", "i915.enable_fbc=1", "pcie_aspm=force"]
+kargs = ["i915.enable_psr=1", "i915.enable_fbc=1", "pcie_aspm=force", "mem_sleep_default=s2idle"]
 KARGS
 
 # ── Audio power save (Intel HDA codec off when idle for 1s) ──
