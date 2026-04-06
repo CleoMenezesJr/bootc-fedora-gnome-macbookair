@@ -84,8 +84,6 @@ COPY 90-backlight.rules /etc/udev/rules.d/90-backlight.rules
 COPY 91-leds.rules /etc/udev/rules.d/91-leds.rules
 # Disable XHC1/LID0 ACPI wakeup sources (prevents spurious wakeups)
 COPY suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
-# Recreate gshadow before sysusers runs (fixes bootc 3-way merge inconsistencies)
-COPY fix-gshadow.service /usr/lib/systemd/system/fix-gshadow.service
 
 # ── System configuration & kernel module installation ──
 RUN <<SYSCONFIG
@@ -246,7 +244,11 @@ dconf update
 # ── Configuring systemd services ──
 echo "▸ Configuring systemd services"
 # Mask unnecessary services
-systemctl mask systemd-remount-fs.service
+# systemd-remount-fs: bootc manages root mount options via initrd, not fstab
+# rpc-gssd: NFS GSS security daemon, not needed on a desktop MacBook
+systemctl mask \
+    systemd-remount-fs.service \
+    rpc-gssd.service
 
 # Enable system-wide hardware services
 systemctl enable \
@@ -255,7 +257,6 @@ systemctl enable \
     tuned.service \
     tuned-ppd.service \
     suspend-fix.service \
-    fix-gshadow.service \
     zram-swap.service
 
 # Enable user-level bootstrap services globally for all graphical sessions

@@ -22,7 +22,6 @@ compsize
 tuned
 tuned-ppd
 bc
-auditctl
 git
 libva-intel-media-driver
 libnma
