@@ -109,7 +109,10 @@ dracut -f "/usr/lib/modules/${kver}/initramfs.img" "${kver}"
 # ── Kernel Arguments: ACPI OSI hacks for MacBook hardware ──
 # Declaring kernel arguments via bootc-native configuration files.
 mkdir -p /usr/lib/bootc/kargs.d/
-echo 'kargs = ["acpi_osi=\"!Darwin\"", "acpi_osi=\"!Windows 2012\""]' > /usr/lib/bootc/kargs.d/10-macbook.toml
+cat > /usr/lib/bootc/kargs.d/10-macbook.toml <<'KARGS'
+kargs = ["acpi_osi=!Darwin", "acpi_osi=!Windows 2012"]
+match-architectures = ["x86_64"]
+KARGS
 
 # ── Kernel Arguments: Intel GPU + PCIe power savings (MacBookAir7,2 / Broadwell) ──
 # PSR: Panel Self Refresh — cuts eDP link power when framebuffer is static
@@ -117,10 +120,11 @@ echo 'kargs = ["acpi_osi=\"!Darwin\"", "acpi_osi=\"!Windows 2012\""]' > /usr/lib
 # pcie_aspm=force: enables PCIe ASPM link power states
 cat > /usr/lib/bootc/kargs.d/20-macbook-power.toml <<'KARGS'
 kargs = ["i915.enable_psr=1", "i915.enable_fbc=1", "pcie_aspm=force", "mem_sleep_default=s2idle"]
+match-architectures = ["x86_64"]
 KARGS
 
 # ── Audio power save (Intel HDA codec off when idle for 1s) ──
-echo 'options snd_hda_intel power_save=1' > /etc/modprobe.d/audio-power-save.conf
+echo 'options snd_hda_intel power_save=1' > /usr/lib/modprobe.d/audio-power-save.conf
 
 # ── RPMFusion for broadcom-wl runtime dependencies ──
 FEDORA_RELEASE="$(rpm -E '%fedora')"
