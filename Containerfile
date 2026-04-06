@@ -143,6 +143,10 @@ rm -rvf /opt && mkdir -vp /var/opt && ln -vs /var/opt /opt
 mkdir -vp /var/usrlocal && mv -v /usr/local/* /var/usrlocal/ 2>/dev/null || true
 rm -rvf /usr/local && ln -vs /var/usrlocal /usr/local
 
+# ── Persistent journal ──
+mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\nStorage=persistent\n' > /etc/systemd/journald.conf.d/persistent.conf
+
 # ── Timezone: Santiago, Chile ──
 echo "▸ Setting timezone to America/Santiago"
 ln -sf /usr/share/zoneinfo/America/Santiago /etc/localtime
@@ -256,11 +260,16 @@ systemctl --global enable \
     post-install.service
 
 # ── Pre-seed system users/groups at build time ──
-# Prevents systemd-sysusers from failing at boot on duplicate entries
-# left behind by RPM scriptlets (e.g. usbmuxd group in /etc/gshadow).
-# Must run AFTER all packages are installed so every sysusers.d entry is covered.
+# Must run AFTER all packages so every sysusers.d entry is covered.
+# grpconv/pwconv ensure group and shadow files are consistent before sysusers runs.
 echo "▸ Pre-seeding system users via systemd-sysusers"
+grpconv && pwconv
 systemd-sysusers
+
+# ── Ensure gshadow/shadow are consistent before sysusers runs at boot ──
+mkdir -p /usr/lib/systemd/system/systemd-sysusers.service.d
+printf '[Service]\nExecStartPre=/usr/sbin/grpconv\nExecStartPre=/usr/sbin/pwconv\n' \
+    > /usr/lib/systemd/system/systemd-sysusers.service.d/fix-shadow.conf
 
 # ── Final cleanup ──
 echo "▸ Final cleanup for bootc compliance"
