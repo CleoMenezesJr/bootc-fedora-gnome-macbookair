@@ -270,10 +270,23 @@ rm -rfv /var/cache/* \
         /var/log/* \
         /var/tmp/* \
         /var/cache/libdnf5/* \
+        /var/lib/dnf \
         /var/usrlocal/share/applications/mimeinfo.cache \
         /var/roothome/.*
 # Final check for /usr/etc
 rm -rvf /usr/etc
+
+# ── Declare /var dirs for bootc lint compliance ──
+echo "▸ Generating tmpfiles.d entries for /var dirs"
+find /var -mindepth 1 -maxdepth 4 -type d \
+  | grep -v '^/var/home' \
+  | sort \
+  | while read -r dir; do
+      mode=$(stat -c '%a' "${dir}")
+      user=$(stat -c '%U' "${dir}")
+      group=$(stat -c '%G' "${dir}")
+      echo "d ${dir} ${mode} ${user} ${group} - -"
+    done > /usr/lib/tmpfiles.d/bootc-var-dirs.conf
 PACKAGES
 
 # ── Lint the final image ──
