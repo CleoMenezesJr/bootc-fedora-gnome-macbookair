@@ -202,6 +202,7 @@ install -Dm755 src/macbook-lighter-kbd.sh /usr/bin/macbook-lighter-kbd
 
 echo "▸ Installing macbook-lighter configuration"
 install -Dm644 macbook-lighter.conf /etc/macbook-lighter.conf
+sed -i 's/^ML_DEBUG=false/ML_DEBUG=true/' /etc/macbook-lighter.conf
 
 echo "▸ Installing macbook-lighter systemd service"
 install -Dm644 macbook-lighter.service /usr/lib/systemd/system/macbook-lighter.service
