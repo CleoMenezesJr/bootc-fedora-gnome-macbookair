@@ -75,13 +75,13 @@ COPY --chmod=755 post-install.sh /usr/bin/post-install.sh
 # Triggers post-install.sh on first graphical login
 COPY post-install.service /usr/lib/systemd/user/post-install.service
 # MacBook keyboard: fn key behavior, swap alt/cmd
-COPY hid-apple.conf /etc/modprobe.d/hid-apple.conf
+COPY hid-apple.conf /usr/lib/modprobe.d/hid-apple.conf
 # Include FaceTimeHD firmware in initramfs
 COPY dracut-facetimehd.conf /etc/dracut.conf.d/facetimehd.conf
 # Allow user-writable screen backlight via udev
-COPY 90-backlight.rules /etc/udev/rules.d/90-backlight.rules
+COPY 90-backlight.rules /usr/lib/udev/rules.d/90-backlight.rules
 # Allow user-writable keyboard backlight via udev
-COPY 91-leds.rules /etc/udev/rules.d/91-leds.rules
+COPY 91-leds.rules /usr/lib/udev/rules.d/91-leds.rules
 # Disable XHC1/LID0 ACPI wakeup sources (prevents spurious wakeups)
 COPY suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
 
@@ -97,7 +97,7 @@ dnf5 -y install kernel-modules-extra --refresh
 
 # ── Dracut: strip unnecessary modules, add FaceTimeHD firmware ──
 echo "▸ Configuring dracut: removing NFS, adding FaceTimeHD firmware"
-tee /etc/dracut.conf.d/no-nfs.conf >/dev/null <<'NONFS'
+tee /usr/lib/dracut.conf.d/no-nfs.conf >/dev/null <<'NONFS'
 omit_dracutmodules+=" nfs "
 omit_drivers+=" nfs nfsv3 nfsv4 nfs_acl nfs_common sunrpc rxrpc rpcrdma auth_rpcgss rpcsec_gss_krb5 "
 NONFS
@@ -148,8 +148,8 @@ mkdir -vp /var/usrlocal && mv -v /usr/local/* /var/usrlocal/ 2>/dev/null || true
 rm -rvf /usr/local && ln -vs /var/usrlocal /usr/local
 
 # ── Persistent journal ──
-mkdir -p /etc/systemd/journald.conf.d
-printf '[Journal]\nStorage=persistent\n' > /etc/systemd/journald.conf.d/persistent.conf
+mkdir -p /usr/lib/systemd/journald.conf.d
+printf '[Journal]\nStorage=persistent\n' > /usr/lib/systemd/journald.conf.d/persistent.conf
 
 # ── Timezone: Santiago, Chile ──
 echo "▸ Setting timezone to America/Santiago"
@@ -271,8 +271,23 @@ systemctl --global enable \
 # Must run AFTER all packages so every sysusers.d entry is covered.
 # grpconv/pwconv ensure group and shadow files are consistent before sysusers runs.
 echo "▸ Pre-seeding system users via systemd-sysusers"
+dnf5 -y install nss-altfiles
 grpconv && pwconv
 systemd-sysusers
+
+# ── nss-altfiles: move system users/groups into /usr ──
+# System users/groups (uid/gid < 1000) are stored in /usr/lib/passwd and
+# /usr/lib/group, which live in the read-only /usr layer and are NOT subject
+# to bootc's 3-way merge of /etc. This prevents UID/GID drift and eliminates
+# /etc/group vs /etc/gshadow inconsistencies across image updates.
+echo "▸ Configuring nss-altfiles"
+getent passwd | awk -F: '$3 < 1000 { print }' > /usr/lib/passwd
+getent group  | awk -F: '$3 < 1000 { print }' > /usr/lib/group
+# altfiles is consulted before files so system users are resolved from /usr
+sed -i \
+    -e 's/^passwd:.*/passwd: altfiles files systemd/' \
+    -e 's/^group:.*/group:  altfiles files systemd/' \
+    /etc/nsswitch.conf
 
 
 # ── Final cleanup ──
