@@ -77,7 +77,7 @@ COPY post-install.service /usr/lib/systemd/user/post-install.service
 # MacBook keyboard: fn key behavior, swap alt/cmd
 COPY hid-apple.conf /usr/lib/modprobe.d/hid-apple.conf
 # Include FaceTimeHD firmware in initramfs
-COPY dracut-facetimehd.conf /etc/dracut.conf.d/facetimehd.conf
+COPY dracut-facetimehd.conf /usr/lib/dracut.conf.d/facetimehd.conf
 # Allow user-writable screen backlight via udev
 COPY 90-backlight.rules /usr/lib/udev/rules.d/90-backlight.rules
 # Allow user-writable keyboard backlight via udev
