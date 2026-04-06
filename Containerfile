@@ -188,8 +188,7 @@ dnf5 -y install \
     "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
     "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
 # Remove rawhide repos to prevent fc45 packages being pulled on Fedora 44
-rm -f /etc/yum.repos.d/rpmfusion-free-rawhide.repo \
-      /etc/yum.repos.d/rpmfusion-nonfree-rawhide.repo
+find /etc/yum.repos.d/ -name '*rawhide*' -delete
 grep -v '^\s*#' /tmp/packages.rpm | grep -v '^\s*$' | xargs dnf5 install -y --refresh
 dnf5 remove -y gnome-tour
 
