@@ -39,13 +39,6 @@ flatpak install --user --noninteractive flathub \
     org.telegram.desktop \
     page.tesk.Refine
 
-echo "Installing weather-oclock extension…"
-git clone --depth 1 https://github.com/CleoMenezesJr/weather-oclock.git /tmp/weather-oclock
-pushd /tmp/weather-oclock > /dev/null
-make install
-popd > /dev/null
-rm -rf /tmp/weather-oclock
-
 # Mark as completed so this service won't run again
 mkdir -p "$(dirname "$FLAG")"
 touch "$FLAG"

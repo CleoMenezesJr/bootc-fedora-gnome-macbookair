@@ -19,7 +19,6 @@ gnome-epub-thumbnailer
 compsize
 
 # ── System utilities ───────────────────────────────────────────────
-thermald
 tuned
 tuned-ppd
 bc

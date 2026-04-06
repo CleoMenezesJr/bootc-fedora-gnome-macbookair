@@ -206,6 +206,13 @@ cp -r "gnome-extension/${EXT_UUID}/." "${EXT_DEST}/"
 
 cd / && rm -rf /tmp/macbook-lighter
 
+# ── Install weather-oclock GNOME extension ──
+echo "▸ Installing weather-oclock GNOME extension from source"
+git clone --depth 1 https://github.com/CleoMenezesJr/weather-oclock.git /tmp/weather-oclock
+cd /tmp/weather-oclock
+make install DESTDIR=/
+cd / && rm -rf /tmp/weather-oclock
+
 # ── Install mbpfan v2.4.0 from source (missing in Fedora 44 repos) ──
 echo "▸ Installing mbpfan v2.4.0 from source"
 git clone --depth 1 --branch v2.4.0 https://github.com/linux-on-mac/mbpfan.git /tmp/mbpfan
@@ -226,7 +233,7 @@ system-db:local
 DCONF_PROFILE
 cat > /etc/dconf/db/local.d/00-gnome-extensions <<'DCONF_EXTENSIONS'
 [org/gnome/shell]
-enabled-extensions=['weather-oclock@cleomenezesjr.github.com', 'macbook-lighter@cleomenezesjr.github.io']
+enabled-extensions=['weatheroclock@CleoMenezesJr.github.io', 'macbook-lighter@cleomenezesjr.github.io']
 DCONF_EXTENSIONS
 dconf update
 
@@ -239,7 +246,6 @@ systemctl mask systemd-remount-fs.service
 systemctl enable \
     macbook-lighter.service \
     mbpfan.service \
-    thermald.service \
     tuned.service \
     tuned-ppd.service \
     suspend-fix.service \
