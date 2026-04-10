@@ -257,7 +257,8 @@ echo "▸ Configuring systemd services"
 # rpc-gssd: NFS GSS security daemon, not needed on a desktop MacBook
 systemctl mask \
     systemd-remount-fs.service \
-    rpc-gssd.service
+    rpc-gssd.service \
+    chronyd.service
 
 # Enable system-wide hardware services
 systemctl enable \
