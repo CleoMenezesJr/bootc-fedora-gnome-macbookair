@@ -128,6 +128,27 @@ KARGS
 # ── Audio power save (Intel HDA codec off when idle for 1s) ──
 echo 'options snd_hda_intel power_save=1' > /usr/lib/modprobe.d/audio-power-save.conf
 
+# ── Restore screen backlight after S3 resume ──
+# After S3 resume the intel_backlight driver may leave brightness at 0.
+# This hook saves the brightness before sleep and restores it after wake.
+mkdir -p /usr/lib/systemd/system-sleep
+cat > /usr/lib/systemd/system-sleep/restore-backlight.sh <<'HOOK'
+#!/bin/bash
+BACKLIGHT=/sys/class/backlight/intel_backlight
+case "$1" in
+    pre)
+        cat "$BACKLIGHT/brightness" > /tmp/backlight-brightness 2>/dev/null || true
+        ;;
+    post)
+        sleep 0.5
+        if [ -f /tmp/backlight-brightness ]; then
+            cat /tmp/backlight-brightness > "$BACKLIGHT/brightness" 2>/dev/null || true
+        fi
+        ;;
+esac
+HOOK
+chmod +x /usr/lib/systemd/system-sleep/restore-backlight.sh
+
 # ── RPMFusion for broadcom-wl runtime dependencies ──
 FEDORA_RELEASE="$(rpm -E '%fedora')"
 dnf5 -y install \
