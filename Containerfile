@@ -289,7 +289,7 @@ rm -rvf /usr/etc
 echo "▸ Generating tmpfiles.d entries for /var dirs"
 find /var -mindepth 1 -maxdepth 4 -type d \
   | grep -v '^/var/home' \
-  | sort \
+  | sort -u \
   | while read -r dir; do
       mode=$(stat -c '%a' "${dir}")
       user=$(stat -c '%u' "${dir}")
