@@ -29,6 +29,7 @@ libva-utils
 lm_sensors
 micro
 podman
+powertop
 tree
 unzip
 usbutils

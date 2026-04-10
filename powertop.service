@@ -1,0 +1,15 @@
+# Applies PowerTOP auto-tune power optimizations at boot.
+# Enables USB autosuspend, WiFi power saving, SATA link power
+# management, PCIe ASPM, and other runtime power savings.
+
+[Unit]
+Description=PowerTOP auto-tune power savings
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/powertop --auto-tune
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

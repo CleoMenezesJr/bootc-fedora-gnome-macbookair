@@ -84,6 +84,8 @@ COPY 90-backlight.rules /usr/lib/udev/rules.d/90-backlight.rules
 COPY 91-leds.rules /usr/lib/udev/rules.d/91-leds.rules
 # Disable XHC1/LID0 ACPI wakeup sources (prevents spurious wakeups)
 COPY suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
+# Run PowerTOP auto-tune at boot for runtime power savings
+COPY powertop.service /usr/lib/systemd/system/powertop.service
 
 # ── System configuration & kernel module installation ──
 RUN <<SYSCONFIG
@@ -264,7 +266,8 @@ systemctl enable \
     tuned.service \
     tuned-ppd.service \
     suspend-fix.service \
-    zram-swap.service
+    zram-swap.service \
+    powertop.service
 
 # Enable user-level bootstrap services globally for all graphical sessions
 systemctl --global enable \
