@@ -86,6 +86,8 @@ COPY 91-leds.rules /usr/lib/udev/rules.d/91-leds.rules
 COPY suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
 # Run PowerTOP auto-tune at boot for runtime power savings
 COPY powertop.service /usr/lib/systemd/system/powertop.service
+# Unload/reload Broadcom wl around sleep to speed up S3 resume
+COPY --chmod=755 wl-suspend.sh /usr/lib/systemd/system-sleep/wl-suspend.sh
 
 # ── System configuration & kernel module installation ──
 RUN <<SYSCONFIG
@@ -248,6 +250,13 @@ cat > /etc/dconf/db/local.d/00-gnome-extensions <<'DCONF_EXTENSIONS'
 [org/gnome/shell]
 enabled-extensions=['weatheroclock@CleoMenezesJr.github.io', 'macbook-lighter@cleomenezesjr.github.io']
 DCONF_EXTENSIONS
+# Disable GNOME Software automatic updates + reboot to prevent unexpected reboots.
+# Updates are managed manually via: sudo bootc upgrade && sudo reboot
+cat > /etc/dconf/db/local.d/01-gnome-software <<'DCONF_SOFTWARE'
+[org/gnome/software]
+download-updates=false
+apply-updates=false
+DCONF_SOFTWARE
 dconf update
 
 # ── Configuring systemd services ──
@@ -255,10 +264,12 @@ echo "▸ Configuring systemd services"
 # Mask unnecessary services
 # systemd-remount-fs: bootc manages root mount options via initrd, not fstab
 # rpc-gssd: NFS GSS security daemon, not needed on a desktop MacBook
+# bootc-fetch-apply-updates.timer: prevents unexpected automatic reboots (updates managed manually)
 systemctl mask \
     systemd-remount-fs.service \
     rpc-gssd.service \
-    chronyd.service
+    chronyd.service \
+    bootc-fetch-apply-updates.timer
 
 # Enable system-wide hardware services
 systemctl enable \
