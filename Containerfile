@@ -86,8 +86,6 @@ COPY 91-leds.rules /usr/lib/udev/rules.d/91-leds.rules
 COPY suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
 # Run PowerTOP auto-tune at boot for runtime power savings
 COPY powertop.service /usr/lib/systemd/system/powertop.service
-# Unload/reload Broadcom wl around sleep to speed up S3 resume
-COPY --chmod=755 wl-suspend.sh /usr/lib/systemd/system-sleep/wl-suspend.sh
 
 # ── System configuration & kernel module installation ──
 RUN <<SYSCONFIG

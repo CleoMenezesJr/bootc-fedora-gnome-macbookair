@@ -11,7 +11,7 @@ After=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'for src in XHC1 LID0 EHC1 EHC2; do grep -Eqw "$src.*\*enabled" /proc/acpi/wakeup 2>/dev/null && echo "$src" > /proc/acpi/wakeup; done'
+ExecStart=/bin/sh -c 'for src in XHC1 LID0 EHC1 EHC2; do grep -Eqw "$src.*\*enabled" /proc/acpi/wakeup 2>/dev/null && echo "$src" > /proc/acpi/wakeup || true; done'
 
 [Install]
 WantedBy=multi-user.target
