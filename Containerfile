@@ -119,7 +119,7 @@ KARGS
 # FBC: Frame Buffer Compression — compresses framebuffer in VRAM
 # pcie_aspm=force: enables PCIe ASPM link power states
 cat > /usr/lib/bootc/kargs.d/20-macbook-power.toml <<'KARGS'
-kargs = ["i915.enable_psr=1", "i915.enable_fbc=1", "pcie_aspm=force", "mem_sleep_default=s2idle"]
+kargs = ["i915.enable_psr=1", "i915.enable_fbc=1", "pcie_aspm=force", "mem_sleep_default=deep"]
 match-architectures = ["x86_64"]
 KARGS
 
