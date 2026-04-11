@@ -140,10 +140,12 @@ case "$1" in
         cat "$BACKLIGHT/brightness" > /tmp/backlight-brightness 2>/dev/null || true
         ;;
     post)
-        sleep 0.5
+        sleep 1
         if [ -f /tmp/backlight-brightness ]; then
             cat /tmp/backlight-brightness > "$BACKLIGHT/brightness" 2>/dev/null || true
         fi
+        # Restart macbook-lighter so the ambient sensor re-initializes after S3 resume
+        systemctl restart macbook-lighter.service 2>/dev/null || true
         ;;
 esac
 HOOK
