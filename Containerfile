@@ -180,6 +180,12 @@ printf '[Journal]\nStorage=persistent\n' > /usr/lib/systemd/journald.conf.d/pers
 echo "▸ Setting timezone to America/Santiago"
 ln -sf /usr/share/zoneinfo/America/Santiago /etc/localtime
 
+# ── Keyboard layout: Spanish (Latin American / MacBook) ──
+echo "▸ Configuring keyboard layout (latam, apple_laptop)"
+cat > /etc/vconsole.conf <<'VCONSOLE'
+KEYMAP=latam
+VCONSOLE
+
 # ── Cleanup builder artifacts ──
 echo "▸ Cleaning up build artifacts and fixing bootc lint issues"
 rm -rvf /tmp/kmods
@@ -271,6 +277,11 @@ cat > /etc/dconf/db/local.d/00-gnome-extensions <<'DCONF_EXTENSIONS'
 [org/gnome/shell]
 enabled-extensions=['weatheroclock@CleoMenezesJr.github.io', 'macbook-lighter@cleomenezesjr.github.io']
 DCONF_EXTENSIONS
+cat > /etc/dconf/db/local.d/02-keyboard <<'DCONF_KEYBOARD'
+[org/gnome/desktop/input-sources]
+sources=[('xkb', 'latam')]
+xkb-options=['apple:alupckeys']
+DCONF_KEYBOARD
 # Disable GNOME Software automatic updates + reboot to prevent unexpected reboots.
 # Updates are managed manually via: sudo bootc upgrade && sudo reboot
 cat > /etc/dconf/db/local.d/01-gnome-software <<'DCONF_SOFTWARE'
