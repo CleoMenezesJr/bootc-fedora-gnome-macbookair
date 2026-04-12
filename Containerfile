@@ -144,8 +144,13 @@ case "$1" in
         if [ -f /tmp/backlight-brightness ]; then
             cat /tmp/backlight-brightness > "$BACKLIGHT/brightness" 2>/dev/null || true
         fi
-        # Restart macbook-lighter so the ambient sensor re-initializes after S3 resume
-        systemctl restart macbook-lighter.service 2>/dev/null || true
+        # Restart macbook-lighter for active user sessions so the ambient sensor re-initializes
+        for uid in $(loginctl list-sessions --no-legend | awk '{print $2}'); do
+            if [ -S "/run/user/$uid/systemd/private" ]; then
+                sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" \
+                    systemctl --user restart macbook-lighter.service 2>/dev/null || true
+            fi
+        done
         ;;
 esac
 HOOK
@@ -227,25 +232,8 @@ dnf5 remove -y gnome-tour
 echo "▸ Installing macbook-lighter from source"
 git clone --depth 1 https://github.com/CleoMenezesJr/macbook-lighter.git /tmp/macbook-lighter
 cd /tmp/macbook-lighter
-
-echo "▸ Installing macbook-lighter scripts"
-install -Dm755 src/macbook-lighter-ambient.sh /usr/bin/macbook-lighter-ambient
-install -Dm755 src/macbook-lighter-screen.sh /usr/bin/macbook-lighter-screen
-install -Dm755 src/macbook-lighter-kbd.sh /usr/bin/macbook-lighter-kbd
-
-echo "▸ Installing macbook-lighter configuration"
-install -Dm644 macbook-lighter.conf /etc/macbook-lighter.conf
+make install DESTDIR=/
 sed -i 's/^ML_DEBUG=false/ML_DEBUG=true/' /etc/macbook-lighter.conf
-
-echo "▸ Installing macbook-lighter systemd service"
-install -Dm644 macbook-lighter.service /usr/lib/systemd/system/macbook-lighter.service
-
-echo "▸ Installing macbook-lighter GNOME extension"
-EXT_UUID="macbook-lighter@cleomenezesjr.github.io"
-EXT_DEST="/usr/share/gnome-shell/extensions/${EXT_UUID}"
-mkdir -p "${EXT_DEST}"
-cp -r "gnome-extension/${EXT_UUID}/." "${EXT_DEST}/"
-
 cd / && rm -rf /tmp/macbook-lighter
 
 # ── Install weather-oclock GNOME extension ──
@@ -305,7 +293,6 @@ systemctl mask \
 
 # Enable system-wide hardware services
 systemctl enable \
-    macbook-lighter.service \
     mbpfan.service \
     tuned.service \
     tuned-ppd.service \
@@ -315,6 +302,7 @@ systemctl enable \
 
 # Enable user-level bootstrap services globally for all graphical sessions
 systemctl --global enable \
+    macbook-lighter.service \
     post-install.service
 
 
