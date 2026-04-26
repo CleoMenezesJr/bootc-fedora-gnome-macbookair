@@ -1,0 +1,5 @@
+# Prevent bcm5974 trackpad from entering USB autosuspend
+# The autosuspend can cause trackpad disconnect after S3 resume
+# and add latency on first touch after idle period
+# Cost: ~10-20mW when idle (negligible)
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ATTR{idProduct}=="026*", ATTR{power/autosuspend}="-1"

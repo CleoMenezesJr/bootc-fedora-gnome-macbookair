@@ -1,0 +1,4 @@
+# Re-enable LID0 as wakeup source when lid opens
+# (may have been disabled by lid-wakeup-guard due to spurious wakeups)
+ACTION=="change", SUBSYSTEM=="acpi", KERNEL=="LID0", ATTR{state}=="open", \
+    RUN+="/bin/sh -c 'grep -Eqw \"LID0.*\\*disabled\" /proc/acpi/wakeup && echo LID0 > /proc/acpi/wakeup || true'"

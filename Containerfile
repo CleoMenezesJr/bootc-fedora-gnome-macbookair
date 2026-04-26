@@ -69,23 +69,43 @@ COPY --from=builder /usr/lib/firmware/facetimehd/ /usr/lib/firmware/facetimehd/
 COPY --from=builder /etc/yum.repos.d/_copr_mulderje-facetimehd-kmod.repo /etc/yum.repos.d/
 
 # Copy project configuration files directly to their final destinations
+# ── Packages list ──
 COPY packages.rpm /tmp/packages.rpm
-# First-login Flatpak bootstrap (runs as user service)
+# ── First-login Flatpak bootstrap (runs as user service) ──
 COPY --chmod=755 post-install.sh /usr/bin/post-install.sh
-# Triggers post-install.sh on first graphical login
 COPY post-install.service /usr/lib/systemd/user/post-install.service
-# MacBook keyboard: fn key behavior, swap alt/cmd
+# ── MacBook keyboard: fn key behavior, swap alt/cmd ──
 COPY hid-apple.conf /usr/lib/modprobe.d/hid-apple.conf
-# Include FaceTimeHD firmware in initramfs
-COPY dracut-facetimehd.conf /usr/lib/dracut.conf.d/facetimehd.conf
-# Allow user-writable screen backlight via udev
+# ── Dracut: optimized initramfs (consolidates facetimehd + no-nfs) ──
+COPY dracut-optimize.conf /usr/lib/dracut/conf.d/macbook-optimize.conf
+# ── Kernel modules: ensure coretemp + applesmc loaded at boot ──
+COPY modules-load.conf /usr/lib/modules-load.d/macbook.conf
+# ── Audio power save: Intel HDA codec off when idle ──
+COPY audio-power-save.conf /usr/lib/modprobe.d/audio-power-save.conf
+# ── Wi-Fi power save: Broadcom wl 802.11 power management ──
+COPY wifi-power-save.conf /usr/lib/modprobe.d/wifi-power-save.conf
+# ── Udev: user-writable screen + keyboard backlight ──
 COPY 90-backlight.rules /usr/lib/udev/rules.d/90-backlight.rules
-# Allow user-writable keyboard backlight via udev
 COPY 91-leds.rules /usr/lib/udev/rules.d/91-leds.rules
-# Disable XHC1/LID0 ACPI wakeup sources (prevents spurious wakeups)
+# ── Udev: exclude bcm5974 trackpad from USB autosuspend ──
+COPY 92-trackpad-autosuspend.rules /usr/lib/udev/rules.d/92-trackpad-autosuspend.rules
+# ── Suspend: disable spurious wakeup sources (XHC1, EHC1, EHC2) ──
 COPY suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
-# Run PowerTOP auto-tune at boot for runtime power savings
-COPY powertop.service /usr/lib/systemd/system/powertop.service
+# ── Suspend: unload/reload Broadcom wl module ──
+COPY --chmod=755 wl-suspend.sh /usr/local/bin/wl-suspend.sh
+COPY wl-suspend.service /usr/lib/systemd/system/wl-suspend.service
+# ── Suspend-then-hibernate: S3 first, hibernate after 60min ──
+COPY sleep.conf /usr/lib/systemd/sleep.conf.d/macbook.conf
+COPY logind.conf /usr/lib/systemd/logind.conf.d/macbook.conf
+# ── Lid wakeup guard: re-suspend if lid is still closed ──
+COPY --chmod=755 lid-wakeup-guard.sh /usr/local/bin/lid-wakeup-guard.sh
+COPY lid-wakeup-guard.service /usr/lib/systemd/system/lid-wakeup-guard.service
+# ── Udev: re-enable LID0 wakeup when lid opens ──
+COPY 93-lid-wakeup.rules /usr/lib/udev/rules.d/93-lid-wakeup.rules
+# ── Fan control: custom mbpfan curve for A1466 ──
+COPY mbpfan.conf /etc/mbpfan.conf
+# ── Power management: tuned custom profile ──
+COPY tuned-macbook-profile/ /etc/tuned/macbook-profile/
 
 # ── System configuration & kernel module installation ──
 RUN <<SYSCONFIG
@@ -93,18 +113,13 @@ set -euo pipefail
 
 echo "▸ Creating required directories"
 mkdir -vp /var/roothome /data /var/home
+mkdir -vp /usr/lib/systemd/sleep.conf.d /usr/lib/systemd/logind.conf.d
 
 echo "▸ Installing kernel-modules-extra for broader hardware support"
 dnf5 -y install kernel-modules-extra --refresh
 
-# ── Dracut: strip unnecessary modules, add FaceTimeHD firmware ──
-echo "▸ Configuring dracut: removing NFS, adding FaceTimeHD firmware"
-tee /usr/lib/dracut.conf.d/no-nfs.conf >/dev/null <<'NONFS'
-omit_dracutmodules+=" nfs "
-omit_drivers+=" nfs nfsv3 nfsv4 nfs_acl nfs_common sunrpc rxrpc rpcrdma auth_rpcgss rpcsec_gss_krb5 "
-NONFS
-
-echo "▸ Regenerating initramfs"
+# ── Dracut: optimized initramfs (config copied above as macbook-optimize.conf) ──
+echo "▸ Regenerating initramfs with optimized dracut config"
 kver="$(rpm -q kernel-core --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')"
 dracut -f "/usr/lib/modules/${kver}/initramfs.img" "${kver}"
 
@@ -118,15 +133,32 @@ KARGS
 
 # ── Kernel Arguments: Intel GPU + PCIe power savings (MacBookAir7,2 / Broadwell) ──
 # PSR: Panel Self Refresh — cuts eDP link power when framebuffer is static
+# DC: Display power states (DC5/DC6 deepest)
 # FBC: Frame Buffer Compression — compresses framebuffer in VRAM
-# pcie_aspm=force: enables PCIe ASPM link power states
+# GuC/HuC: GPU firmware for power management + VA-API
+# pcie_aspm=active: enables ASPM only on devices that support it
 cat > /usr/lib/bootc/kargs.d/20-macbook-power.toml <<'KARGS'
-kargs = ["i915.enable_psr=0", "i915.enable_dc=0", "i915.enable_fbc=1", "pcie_aspm=force", "mem_sleep_default=deep"]
+kargs = [
+  "i915.enable_psr=1",
+  "i915.enable_dc=2",
+  "i915.enable_fbc=1",
+  "i915.enable_guc=2",
+  "pcie_aspm=active",
+  "mem_sleep_default=deep"
+]
 match-architectures = ["x86_64"]
 KARGS
 
-# ── Audio power save (Intel HDA codec off when idle for 1s) ──
-echo 'options snd_hda_intel power_save=1' > /usr/lib/modprobe.d/audio-power-save.conf
+# ── Kernel Arguments: NVMe + USB power savings ──
+# NVMe PS3 allowed (~55ms resume) but not PS4 (causes hangs on some MacBook SSDs)
+# USB autosuspend after 5s (bcm5974 trackpad excluded via udev rule)
+cat > /usr/lib/bootc/kargs.d/30-macbook-hardware.toml <<'KARGS'
+kargs = [
+  "nvme_core.default_ps_max_latency_us=55000",
+  "usbcore.autosuspend=5"
+]
+match-architectures = ["x86_64"]
+KARGS
 
 # ── Restore screen backlight after S3 resume ──
 # After S3 resume the intel_backlight driver may leave brightness at 0.
@@ -180,6 +212,13 @@ rm -rvf /usr/local && ln -vs /var/usrlocal /usr/local
 # ── Persistent journal ──
 mkdir -p /usr/lib/systemd/journald.conf.d
 printf '[Journal]\nStorage=persistent\n' > /usr/lib/systemd/journald.conf.d/persistent.conf
+
+# ── Composefs: read-only / with integrity verification (bootc best practice) ──
+mkdir -p /usr/lib/ostree
+cat > /usr/lib/ostree/prepare-root.conf <<'COMPOSEFS'
+[composefs]
+enabled = true
+COMPOSEFS
 
 # ── Timezone: Santiago, Chile ──
 echo "▸ Setting timezone to America/Santiago"
@@ -277,6 +316,47 @@ cat > /etc/dconf/db/local.d/01-gnome-software <<'DCONF_SOFTWARE'
 download-updates=false
 apply-updates=false
 DCONF_SOFTWARE
+# Mutter experimental features: KMS modifiers for better i915 performance,
+# autoclose Xwayland when no X11 apps, per-monitor fractional scaling
+cat > /etc/dconf/db/local.d/03-mutter <<'DCONF_MUTTER'
+[org/gnome/mutter]
+experimental-features=['scale-monitor-framebuffer', 'kms-modifiers', 'autoclose-xwayland']
+DCONF_MUTTER
+# Font rendering: RGBA subpixel for non-Retina 1366x768 display
+cat > /etc/dconf/db/local.d/04-fonts <<'DCONF_FONTS'
+[org/gnome/desktop/interface]
+font-antialiasing='rgba'
+font-hinting='slight'
+font-rgba-order='rgb'
+DCONF_FONTS
+# Power saving: idle dim, suspend-then-hibernate on battery, power-saver on low battery
+cat > /etc/dconf/db/local.d/05-power <<'DCONF_POWER'
+[org/gnome/settings-daemon/plugins/power]
+idle-dim=true
+idle-brightness=20
+sleep-inactive-battery-timeout=600
+sleep-inactive-battery-type='suspend-then-hibernate'
+power-saver-profile-on-low-battery=true
+
+[org/gnome/desktop/session]
+idle-delay=120
+DCONF_POWER
+# Night Light: 3500K warmth with automatic schedule
+cat > /etc/dconf/db/local.d/06-nightlight <<'DCONF_NIGHTLIGHT'
+[org/gnome/settings-daemon/plugins/color]
+night-light-enabled=true
+night-light-temperature=uint32 3500
+night-light-schedule-automatic=true
+DCONF_NIGHTLIGHT
+# Responsiveness: faster unresponsive app detection (3s instead of 5s)
+cat > /etc/dconf/db/local.d/07-responsiveness <<'DCONF_RESPONSIVE'
+[org/gnome/mutter]
+check-alive-timeout=uint32 3000
+
+[org/gnome/desktop/interface]
+enable-animations=true
+overlay-scrolling=true
+DCONF_RESPONSIVE
 dconf update
 
 # ── Configuring systemd services ──
@@ -285,20 +365,25 @@ echo "▸ Configuring systemd services"
 # systemd-remount-fs: bootc manages root mount options via initrd, not fstab
 # rpc-gssd: NFS GSS security daemon, not needed on a desktop MacBook
 # bootc-fetch-apply-updates.timer: prevents unexpected automatic reboots (updates managed manually)
+# tracker-miner-fs/extract: indexer I/O not worth the benefit on lightweight desktop
 systemctl mask \
-    systemd-remount-fs.service \
-    rpc-gssd.service \
-    chronyd.service \
-    bootc-fetch-apply-updates.timer
+ systemd-remount-fs.service \
+ rpc-gssd.service \
+ chronyd.service \
+ bootc-fetch-apply-updates.timer \
+ tracker-miner-fs-3.service \
+ tracker-extract-3.service
 
 # Enable system-wide hardware services
+# powertop.service removed — replaced by tuned custom profile
 systemctl enable \
-    mbpfan.service \
-    tuned.service \
-    tuned-ppd.service \
-    suspend-fix.service \
-    zram-swap.service \
-    powertop.service
+ mbpfan.service \
+ tuned.service \
+ tuned-ppd.service \
+ suspend-fix.service \
+ zram-swap.service \
+ wl-suspend.service \
+ lid-wakeup-guard.service
 
 # Enable user-level bootstrap services globally for all graphical sessions
 systemctl --global enable \
@@ -321,14 +406,18 @@ rm -rfv /var/cache/* \
 rm -rvf /usr/etc
 
 # ── Declare /var dirs for bootc lint compliance ──
-echo "▸ Generating tmpfiles.d entries for /var dirs"
-find /var -mindepth 1 -maxdepth 4 -type d \
-  | grep -v '^/var/home' \
-  | sort -u \
-  | while read -r dir; do
-      mode=$(stat -c '%a' "${dir}")
-      echo "d ${dir} ${mode} - - - -"
-    done > /usr/lib/tmpfiles.d/bootc-var-dirs.conf
+echo "▸ Declaring tmpfiles.d entries for /var dirs"
+cat > /usr/lib/tmpfiles.d/bootc-var-dirs.conf <<'TMPFILES'
+d /var/roothome 0750 - - -
+d /var/data 0755 - - -
+d /var/opt 0755 - - -
+d /var/usrlocal 0755 - - -
+d /var/cache 0755 - - -
+d /var/log 0755 - - -
+d /var/tmp 1777 - - -
+d /var/lib 0755 - - -
+d /var/lib/dnf 0755 - - -
+TMPFILES
 PACKAGES
 
 # ── Lint the final image ──

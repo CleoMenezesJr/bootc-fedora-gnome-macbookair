@@ -1,0 +1,13 @@
+[Unit]
+Description=Unload/Reload Broadcom wl module on suspend/resume
+Before=sleep.target
+StopWhenUnneeded=yes
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/wl-suspend.sh pre
+ExecStop=/usr/local/bin/wl-suspend.sh post
+
+[Install]
+WantedBy=sleep.target

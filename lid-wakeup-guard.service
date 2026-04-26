@@ -1,0 +1,10 @@
+[Unit]
+Description=Verify lid is open after wakeup, re-suspend if not
+After=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/lid-wakeup-guard.sh
+
+[Install]
+WantedBy=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
