@@ -4,7 +4,7 @@ After=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/lid-wakeup-guard.sh
+ExecStart=/usr/bin/lid-wakeup-guard.sh
 
 [Install]
 WantedBy=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target

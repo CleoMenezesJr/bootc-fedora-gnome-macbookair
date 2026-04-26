@@ -92,13 +92,13 @@ COPY 92-trackpad-autosuspend.rules /usr/lib/udev/rules.d/92-trackpad-autosuspend
 # ── Suspend: disable spurious wakeup sources (XHC1, EHC1, EHC2) ──
 COPY suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
 # ── Suspend: unload/reload Broadcom wl module ──
-COPY --chmod=755 wl-suspend.sh /usr/local/bin/wl-suspend.sh
+COPY --chmod=755 wl-suspend.sh /usr/bin/wl-suspend.sh
 COPY wl-suspend.service /usr/lib/systemd/system/wl-suspend.service
 # ── Suspend-then-hibernate: S3 first, hibernate after 60min ──
 COPY sleep.conf /usr/lib/systemd/sleep.conf.d/macbook.conf
 COPY logind.conf /usr/lib/systemd/logind.conf.d/macbook.conf
 # ── Lid wakeup guard: re-suspend if lid is still closed ──
-COPY --chmod=755 lid-wakeup-guard.sh /usr/local/bin/lid-wakeup-guard.sh
+COPY --chmod=755 lid-wakeup-guard.sh /usr/bin/lid-wakeup-guard.sh
 COPY lid-wakeup-guard.service /usr/lib/systemd/system/lid-wakeup-guard.service
 # ── Udev: re-enable LID0 wakeup when lid opens ──
 COPY 93-lid-wakeup.rules /usr/lib/udev/rules.d/93-lid-wakeup.rules
