@@ -82,8 +82,6 @@ COPY dracut-optimize.conf /usr/lib/dracut/conf.d/macbook-optimize.conf
 COPY modules-load.conf /usr/lib/modules-load.d/macbook.conf
 # ── Audio power save: Intel HDA codec off when idle ──
 COPY audio-power-save.conf /usr/lib/modprobe.d/audio-power-save.conf
-# ── Wi-Fi power save: Broadcom wl 802.11 power management ──
-COPY wifi-power-save.conf /usr/lib/modprobe.d/wifi-power-save.conf
 # ── Udev: user-writable screen + keyboard backlight ──
 COPY 90-backlight.rules /usr/lib/udev/rules.d/90-backlight.rules
 COPY 91-leds.rules /usr/lib/udev/rules.d/91-leds.rules

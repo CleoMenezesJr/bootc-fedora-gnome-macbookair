@@ -34,6 +34,8 @@ if [ "$LID_STATE" = "closed" ]; then
 else
     # Lid is open — reset counter and re-enable LID0 if needed
     echo "0" > "$RATE_FILE"
-    grep -Eqw "LID0.*\*disabled" /proc/acpi/wakeup 2>/dev/null && \
-        echo "LID0" > /proc/acpi/wakeup
+ grep -Eqw "LID0.*\\*disabled" /proc/acpi/wakeup 2>/dev/null && \
+ echo "LID0" > /proc/acpi/wakeup || true
 fi
+
+exit 0
