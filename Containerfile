@@ -87,6 +87,8 @@ COPY 90-backlight.rules /usr/lib/udev/rules.d/90-backlight.rules
 COPY 91-leds.rules /usr/lib/udev/rules.d/91-leds.rules
 # ── Udev: exclude bcm5974 trackpad from USB autosuspend ──
 COPY 92-trackpad-autosuspend.rules /usr/lib/udev/rules.d/92-trackpad-autosuspend.rules
+# ── Udev: prevent Thunderbolt switch from entering D3cold ──
+COPY 94-thunderbolt-pm.rules /usr/lib/udev/rules.d/94-thunderbolt-pm.rules
 # ── Suspend: disable spurious wakeup sources (XHC1, EHC1, EHC2) ──
 COPY suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
 # ── Suspend: Broadcom wl WiFi interface reset ──
@@ -95,6 +97,9 @@ COPY wl-suspend.service /usr/lib/systemd/system/wl-suspend.service
 # ── Suspend: stop heavy services before sleep for fast resume ──
 COPY --chmod=755 sleep-helpers.sh /usr/bin/sleep-helpers.sh
 COPY sleep-helpers.service /usr/lib/systemd/system/sleep-helpers.service
+# ── Resume: restart macbook-lighter after user.slice is thawed ──
+COPY --chmod=755 resume-lighter.sh /usr/bin/resume-lighter.sh
+COPY resume-lighter.service /usr/lib/systemd/system/resume-lighter.service
 # ── Suspend-then-hibernate: S3 first, hibernate after 60min ──
 COPY sleep.conf /usr/lib/systemd/sleep.conf.d/macbook.conf
 COPY logind.conf /usr/lib/systemd/logind.conf.d/macbook.conf
@@ -172,18 +177,17 @@ case "$1" in
     pre)
         cat "$BACKLIGHT/brightness" > /tmp/backlight-brightness 2>/dev/null || true
         ;;
-    post)
-        sleep 1
-        if [ -f /tmp/backlight-brightness ]; then
-            cat /tmp/backlight-brightness > "$BACKLIGHT/brightness" 2>/dev/null || true
-        fi
-        # Restart macbook-lighter for active user sessions so the ambient sensor re-initializes
-        for uid in $(loginctl list-sessions --no-legend | awk '{print $2}'); do
-            if [ -S "/run/user/$uid/systemd/private" ]; then
-                sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" \
-                    systemctl --user restart macbook-lighter.service 2>/dev/null || true
-            fi
-        done
+ post)
+ sleep 1
+ if [ -f /tmp/backlight-brightness ]; then
+ cat /tmp/backlight-brightness > "$BACKLIGHT/brightness" 2>/dev/null || true
+ fi
+ # NOTE: Do NOT call systemctl --user or sudo -u here.
+ # This hook runs inside the systemd-suspend cgroup while user.slice
+ # is still frozen. Calling systemctl --user blocks until user.slice
+ # thaws, but user.slice will not thaw until systemd-suspend finishes,
+ # creating a deadlock that adds ~45s to resume time.
+ # macbook-lighter restart is handled by resume-lighter.service instead.
         ;;
 esac
 HOOK
@@ -385,7 +389,8 @@ systemctl enable \
  zram-swap.service \
  wl-suspend.service \
  sleep-helpers.service \
- lid-wakeup-guard.service
+ lid-wakeup-guard.service \
+ resume-lighter.service
 
 # Enable user-level bootstrap services globally for all graphical sessions
 systemctl --global enable \

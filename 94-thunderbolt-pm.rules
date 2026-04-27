@@ -1,0 +1,10 @@
+# Prevent Thunderbolt PCIe switch from entering D3cold during suspend.
+# On MacBookAir7,2 the Intel DSL3510 Thunderbolt controller (8086:156b)
+# cannot restore D3cold→D0 on S3 resume, causing a ~30s kernel
+# reconfiguration loop. Disabling runtime PM on these ports keeps
+# them in D0 during S3, avoiding the problem.
+# The trade-off is slightly higher power draw (~0.5W) from the
+# Thunderbolt controller while idle, but this is negligible compared
+# to the 30s resume delay it prevents.
+
+SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x156b", ATTR{power/control}="on"

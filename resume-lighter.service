@@ -1,0 +1,13 @@
+[Unit]
+Description=Restart macbook-lighter after resume
+Before=sleep.target
+StopWhenUnneeded=yes
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/resume-lighter.sh pre
+ExecStop=/usr/bin/resume-lighter.sh post
+
+[Install]
+WantedBy=sleep.target
