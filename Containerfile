@@ -89,9 +89,12 @@ COPY 91-leds.rules /usr/lib/udev/rules.d/91-leds.rules
 COPY 92-trackpad-autosuspend.rules /usr/lib/udev/rules.d/92-trackpad-autosuspend.rules
 # ── Suspend: disable spurious wakeup sources (XHC1, EHC1, EHC2) ──
 COPY suspend-fix.service /usr/lib/systemd/system/suspend-fix.service
-# ── Suspend: unload/reload Broadcom wl module ──
+# ── Suspend: Broadcom wl WiFi interface reset ──
 COPY --chmod=755 wl-suspend.sh /usr/bin/wl-suspend.sh
 COPY wl-suspend.service /usr/lib/systemd/system/wl-suspend.service
+# ── Suspend: stop heavy services before sleep for fast resume ──
+COPY --chmod=755 sleep-helpers.sh /usr/bin/sleep-helpers.sh
+COPY sleep-helpers.service /usr/lib/systemd/system/sleep-helpers.service
 # ── Suspend-then-hibernate: S3 first, hibernate after 60min ──
 COPY sleep.conf /usr/lib/systemd/sleep.conf.d/macbook.conf
 COPY logind.conf /usr/lib/systemd/logind.conf.d/macbook.conf
@@ -381,6 +384,7 @@ systemctl enable \
  suspend-fix.service \
  zram-swap.service \
  wl-suspend.service \
+ sleep-helpers.service \
  lid-wakeup-guard.service
 
 # Enable user-level bootstrap services globally for all graphical sessions

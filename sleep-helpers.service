@@ -1,0 +1,13 @@
+[Unit]
+Description=Stop heavy services before suspend for fast resume
+Before=sleep.target
+StopWhenUnneeded=yes
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/sleep-helpers.sh pre
+ExecStop=/usr/bin/sleep-helpers.sh post
+
+[Install]
+WantedBy=sleep.target
