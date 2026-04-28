@@ -392,11 +392,23 @@ systemctl enable \
  lid-wakeup-guard.service \
  resume-lighter.service
 
+# ── PAM: disable fingerprint auth when fprintd-pam is not installed ──
+# The base image ships authselect profile "local" with "with-fingerprint"
+# but fprintd-pam is not installed, causing PAM warnings on every sudo.
+authselect select local with-silent-lastlog with-mdns4 --force --nobackup
+
 # Enable user-level bootstrap services globally for all graphical sessions
 systemctl --global enable \
     macbook-lighter.service \
     post-install.service
 
+
+# ── FacetimeHD: silence optional firmware load error ──
+# The facetimehd module loads firmware.bin successfully but also tries
+# to load 1871_01XX.dat (an optional calibration file). Since that file
+# doesn't exist, the kernel logs an error each boot and on S3 resume.
+# Create a symlink so the kernel finds the file and doesn't log the error.
+ln -sf firmware.bin /usr/lib/firmware/facetimehd/1871_01XX.dat
 
 # ── Final cleanup ──
 echo "▸ Final cleanup for bootc compliance"
