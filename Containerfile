@@ -42,11 +42,17 @@ fi
 curl -LsSf -o /etc/yum.repos.d/_copr_mulderje-facetimehd-kmod.repo \
     "https://copr.fedorainfracloud.org/coprs/mulderje/facetimehd-kmod/repo/fedora-${COPR_RELEASE}/mulderje-facetimehd-kmod-fedora-${COPR_RELEASE}.repo"
 
-echo "▸ Installing and building akmod-facetimehd"
-ARCH="$(rpm -E '%_arch')"
-dnf5 -y install "akmod-facetimehd-*.fc${FEDORA_RELEASE}.${ARCH}" || \
-    dnf5 -y install akmod-facetimehd facetimehd-kmod-common
-akmods --force --kernels "${KERNEL_VERSION}" --kmod facetimehd
+# TEMP: building kmod from fork instead of COPR to test BCM1570 probe fix
+#echo "▸ Installing and building akmod-facetimehd"
+#ARCH="$(rpm -E '%_arch')"
+#dnf5 -y install "akmod-facetimehd-*.fc${FEDORA_RELEASE}.${ARCH}" || \
+#    dnf5 -y install akmod-facetimehd facetimehd-kmod-common
+#akmods --force --kernels "${KERNEL_VERSION}" --kmod facetimehd
+
+echo "▸ Building FaceTimeHD from fork (BCM1570 patch test)"
+git clone --depth 1 --branch fix/sensor-power-and-probe \
+    https://github.com/CleoMenezesJr/facetimehd.git /tmp/facetimehd
+make -C /usr/src/kernels/${KERNEL_VERSION} M=/tmp/facetimehd modules
 
 # Cleanup builder cache for this layer
 dnf5 clean all && rm -rf /var/cache/libdnf5 /var/lib/dnf
@@ -62,7 +68,9 @@ FROM quay.io/fedora/fedora-bootc:44
 
 # Copy pre-built kernel module RPMs from builder
 COPY --from=builder /var/cache/akmods/wl/kmod-wl*.rpm /tmp/kmods/
-COPY --from=builder /var/cache/akmods/facetimehd/kmod-facetimehd*.rpm /tmp/kmods/
+# TEMP: kmod built from fork instead of COPR
+# COPY --from=builder /var/cache/akmods/facetimehd/kmod-facetimehd*.rpm /tmp/kmods/
+COPY --from=builder /tmp/facetimehd/facetimehd.ko /tmp/facetimehd.ko
 
 # Copy FaceTimeHD firmware and repo config from builder
 COPY --from=builder /usr/lib/firmware/facetimehd/ /usr/lib/firmware/facetimehd/
@@ -202,10 +210,15 @@ dnf5 -y install \
 echo "▸ Installing Broadcom WiFi kernel module (kmod-wl)"
 dnf5 -y install /tmp/kmods/kmod-wl-*.rpm
 
-echo "▸ Installing FaceTimeHD camera kernel module (kmod-facetimehd)"
+# TEMP: installing kmod from fork instead of COPR RPM
+echo "▸ Installing FaceTimeHD camera kernel module (fork patch test)"
 dnf5 -y install facetimehd-kmod-common
-dnf5 -y install /tmp/kmods/kmod-facetimehd-*.rpm || \
-    rpm -ivh --nodeps /tmp/kmods/kmod-facetimehd-*.rpm
+install -D /tmp/facetimehd.ko \
+    /usr/lib/modules/${kver}/extra/facetimehd/facetimehd.ko
+depmod -a "${kver}"
+rm -f /tmp/facetimehd.ko
+#dnf5 -y install /tmp/kmods/kmod-facetimehd-*.rpm || \
+#    rpm -ivh --nodeps /tmp/kmods/kmod-facetimehd-*.rpm
 
 # ── Writable directories (bootc best practice) ──
 # See: https://bootc-dev.github.io/bootc/building/guidance.html
