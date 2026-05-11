@@ -377,6 +377,69 @@ overlay-scrolling=true
 DCONF_RESPONSIVE
 dconf update
 
+# ── Add swapfile for MacBook Air 8GB (disk overflow beyond zram) ────────────
+echo "▸ Adding swapfile script and service"
+cat > /usr/local/bin/add-swapfile.sh <<'SWAPFILE_SCRIPT'
+#!/bin/bash
+# Add 8GB swapfile for MacBook Air 2015 (8GB RAM)
+# This runs on first boot to create persistent swapfile on disk
+# Keep zram as primary swap (fast), use disk swap as overflow for heavy workloads
+
+set -euo pipefail
+
+SWAPFILE="/swapfile"
+SWAP_SIZE_MB=8192
+
+# Check if swapfile already exists
+if [[ -f "$SWAPFILE" ]]; then
+    echo "Swapfile $SWAPFILE already exists, skipping"
+    exit 0
+fi
+
+# Create swapfile
+echo "Creating ${SWAP_SIZE_MB}MB swapfile at $SWAPFILE..."
+fallocate -l ${SWAP_SIZE_MB}M "$SWAPFILE"
+chmod 600 "$SWAPFILE"
+mkswap "$SWAPFILE"
+swapon "$SWAPFILE"
+
+# Persist across reboots (already handled by fstab if created by Fedora, but ensure it)
+if ! grep -q "$SWAPFILE" /etc/fstab; then
+    echo "$SWAPFILE none swap sw 0 0" >> /etc/fstab
+fi
+
+# Adjust swappiness: prefer zram (RAM) first, use disk swap as overflow
+# zram comes first automatically since it's created at boot, this is fallback
+# Lower swappiness (40) to keep active pages in RAM/zram, only spill to disk under pressure
+echo "Setting swappiness to 40..."
+sysctl vm.swappiness=40
+
+# Make swappiness persistent
+if [[ ! -f /usr/lib/sysctl.d/99-swap-overspill.conf ]]; then
+    echo "vm.swappiness=40" > /usr/lib/sysctl.d/99-swap-overspill.conf
+fi
+
+echo "Swapfile created and enabled. Total swap: $(free -h | awk '/^Swap:/ {print $2}')"
+SWAPFILE_SCRIPT
+chmod +x /usr/local/bin/add-swapfile.sh
+
+cat > /usr/lib/systemd/system/add-swapfile.service <<'SWAPFILE_SERVICE'
+[Unit]
+Description=Add 8GB swapfile for MacBook Air (bootc image)
+DefaultDependencies=no
+Before=local-fs.target
+After=swap.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/add-swapfile.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+SWAPFILE_SERVICE
+systemctl enable add-swapfile.service
+
 # ── Configuring systemd services ──
 echo "▸ Configuring systemd services"
 # Mask unnecessary services
@@ -400,6 +463,7 @@ systemctl enable \
  tuned-ppd.service \
  suspend-fix.service \
  zram-swap.service \
+ add-swapfile.service \
  wl-suspend.service \
  sleep-helpers.service \
  lid-wakeup-guard.service \
