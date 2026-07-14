@@ -31,8 +31,10 @@ echo "▸ Installing and building akmod-wl (Broadcom WiFi)"
 dnf5 -y install akmod-wl
 akmods --force --kernels "${KERNEL_VERSION}" --kmod wl
 
-# ── FaceTimeHD camera (from COPR mulderje/facetimehd-kmod) ──
-echo "▸ Enabling COPR for FaceTimeHD kernel module"
+# ── FaceTimeHD camera (kmod built from patjak/facetimehd source) ──
+# The COPR is kept only for the facetimehd-kmod-common userspace package;
+# the kernel module itself is compiled from upstream source below.
+echo "▸ Enabling COPR for facetimehd-kmod-common"
 # For Fedora >= 41 the COPR uses "rawhide" as the release identifier
 if [ "${FEDORA_RELEASE}" -ge 41 ]; then
     COPR_RELEASE="rawhide"
@@ -42,11 +44,9 @@ fi
 curl -LsSf -o /etc/yum.repos.d/_copr_mulderje-facetimehd-kmod.repo \
     "https://copr.fedorainfracloud.org/coprs/mulderje/facetimehd-kmod/repo/fedora-${COPR_RELEASE}/mulderje-facetimehd-kmod-fedora-${COPR_RELEASE}.repo"
 
-echo "▸ Installing and building akmod-facetimehd"
-ARCH="$(rpm -E '%_arch')"
-dnf5 -y install "akmod-facetimehd-*.fc${FEDORA_RELEASE}.${ARCH}" || \
-    dnf5 -y install akmod-facetimehd facetimehd-kmod-common
-akmods --force --kernels "${KERNEL_VERSION}" --kmod facetimehd
+echo "▸ Building FaceTimeHD kmod from source (patjak/facetimehd)"
+git clone --depth 1 https://github.com/patjak/facetimehd.git /tmp/facetimehd
+make -C /usr/src/kernels/${KERNEL_VERSION} M=/tmp/facetimehd modules
 
 # Cleanup builder cache for this layer
 dnf5 clean all && rm -rf /var/cache/libdnf5 /var/lib/dnf
@@ -62,7 +62,8 @@ FROM quay.io/fedora/fedora-bootc:44
 
 # Copy pre-built kernel module RPMs from builder
 COPY --from=builder /var/cache/akmods/wl/kmod-wl*.rpm /tmp/kmods/
-COPY --from=builder /var/cache/akmods/facetimehd/kmod-facetimehd*.rpm /tmp/kmods/
+# FaceTimeHD module compiled from patjak/facetimehd source
+COPY --from=builder /tmp/facetimehd/facetimehd.ko /tmp/facetimehd.ko
 
 # Copy FaceTimeHD firmware and repo config from builder
 COPY --from=builder /usr/lib/firmware/facetimehd/ /usr/lib/firmware/facetimehd/
@@ -202,10 +203,12 @@ dnf5 -y install \
 echo "▸ Installing Broadcom WiFi kernel module (kmod-wl)"
 dnf5 -y install /tmp/kmods/kmod-wl-*.rpm
 
-echo "▸ Installing FaceTimeHD camera kernel module (kmod-facetimehd)"
+echo "▸ Installing FaceTimeHD camera kernel module (built from patjak/facetimehd)"
 dnf5 -y install facetimehd-kmod-common
-dnf5 -y install /tmp/kmods/kmod-facetimehd-*.rpm || \
-    rpm -ivh --nodeps /tmp/kmods/kmod-facetimehd-*.rpm
+install -D /tmp/facetimehd.ko \
+    /usr/lib/modules/${kver}/extra/facetimehd/facetimehd.ko
+depmod -a "${kver}"
+rm -f /tmp/facetimehd.ko
 
 # ── Writable directories (bootc best practice) ──
 # See: https://bootc-dev.github.io/bootc/building/guidance.html
