@@ -28,10 +28,12 @@ Immutable Fedora 44 image with GNOME Shell, tailored for MacBook Air hardware. A
 | `post-install.service` | Systemd **user** service (runs on first login) |
 | `config.toml` | Anaconda kickstart config for ISO generation |
 | `hid-apple.conf` | MacBook keyboard driver configuration |
-| `dracut-facetimehd.conf` | Includes FaceTimeHD firmware in initramfs |
+| `dracut-optimize.conf` | Initramfs tuning: FaceTimeHD firmware, early drivers, no NFS |
 | `suspend-fix.service` | Fixes MacBook spurious wakeup from suspend |
-| `powertop.service` | Battery optimization via PowerTOP auto-tune |
-| `.github/workflows/build-image.yml` | Daily CI/CD build (06:45 UTC) |
+| `tuned-macbook-profile/` | Custom tuned profile used by GNOME's "Balanced" power mode |
+| `cosign.pub` | Public key used to verify image signatures |
+| `registries-sigstore.yaml` | Makes containers/image fetch cosign signatures from GHCR |
+| `.github/workflows/build-image.yml` | Daily CI/CD build (02:00 UTC), rechunked and signed |
 
 ## MacBook-Specific Features
 
@@ -39,7 +41,7 @@ Immutable Fedora 44 image with GNOME Shell, tailored for MacBook Air hardware. A
 - **FaceTimeHD Camera**: Kernel module + firmware baked into the image.
 - **Keyboard**: `hid_apple` configured with `fnmode=2` (F-keys default) and `iso_layout=0` (ANSI).
 - **Suspend Fix**: Disables XHC1/LID0 ACPI wakeup to prevent spurious wake from sleep.
-- **Battery**: PowerTOP auto-tune and `libva-intel-media-driver` for hardware video decoding.
+- **Battery**: custom `tuned` profile (applied by GNOME's "Balanced" mode via `tuned-ppd`), i915 PSR/FBC/DC, PCIe ASPM, HDA power save and `libva-intel-media-driver` for hardware video decoding.
 - **Thermals**: [`mbpfan`](https://github.com/linux-on-mac/mbpfan) (built from source v2.4.0) enabled with a custom fan curve for better heat management.
 - **Kernel**: `acpi_osi` arguments for improved ACPI/Power management compatibility.
 - **Ambient Light**: [`Clight`](https://github.com/FedeDP/Clight) (built from source) for automatic screen/keyboard backlight with GNOME integration.
@@ -50,7 +52,7 @@ Flatpak applications are installed automatically as `--user` on the first graphi
 
 ## How to Update
 
-The image is rebuilt daily at 02:00 UTC time.
+The image is rebuilt daily at 02:00 UTC and rechunked into reproducible, package-based layers, so `bootc upgrade` only downloads what actually changed.
 
 ```bash
 # Check for updates
@@ -107,6 +109,16 @@ sudo bootc rollback
 # Switch to this image (if already on bootc)
 sudo bootc switch ghcr.io/CleoMenezesJr/bootc-fedora-gnome-macbookair:latest
 ```
+
+## Image Signing
+
+Every image pushed by CI is signed with [cosign](https://github.com/sigstore/cosign), and the image ships the public key (`cosign.pub`) plus a `policy.json` rule for this repository. Once you're running this image, turn on verification so `bootc upgrade` refuses any image that wasn't signed by this repo's CI:
+
+```bash
+sudo bootc switch --enforce-container-sigverify ghcr.io/cleomenezesjr/bootc-fedora-gnome-macbookair:latest
+```
+
+CI signs with the `SIGNING_SECRET` repository secret (the contents of `cosign.key`, which is never committed). Without it, images are pushed unsigned and the build logs a warning.
 
 ## Rebasing from Fedora Atomic (Silverblue/Kinoite)
 
