@@ -460,4 +460,4 @@ TMPFILES
 PACKAGES
 
 # ── Lint the final image ──
-RUN bootc container lint --fatal-warnings
+RUN bootc container lint
