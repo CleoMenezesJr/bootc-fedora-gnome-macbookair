@@ -38,7 +38,7 @@ Immutable Fedora 44 image with GNOME Shell, tailored for MacBook Air hardware. A
 - **Broadcom WiFi**: `kmod-wl` built against the image kernel, ready to use out of the box.
 - **FaceTimeHD Camera**: Kernel module + firmware baked into the image.
 - **Keyboard**: `hid_apple` configured with `fnmode=2` (F-keys default) and `iso_layout=0` (ANSI).
-- **Suspend Fix**: Disables XHC1/LID0 ACPI wakeup to prevent spurious wake from sleep.
+- **Suspend Fix**: Disables XHC1/EHC1/EHC2 ACPI wakeup to prevent spurious wake from sleep; `lid-wakeup-guard` re-suspends if the lid is still closed after a wakeup.
 - **Battery**: custom `tuned` profile (applied by GNOME's "Balanced" mode via `tuned-ppd`), i915 PSR/FBC/DC, PCIe ASPM, HDA power save and `libva-intel-media-driver` for hardware video decoding.
 - **Thermals**: [`mbpfan`](https://github.com/linux-on-mac/mbpfan) (built from source v2.4.0) enabled with a custom fan curve for better heat management.
 - **Kernel**: `acpi_osi` arguments for improved ACPI/Power management compatibility.
