@@ -3,3 +3,4 @@ output/
 *.qcow2
 *.raw
 *.vmdk
+cosign.key

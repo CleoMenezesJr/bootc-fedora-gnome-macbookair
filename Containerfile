@@ -7,20 +7,30 @@
 # ── Stage 1: Build out-of-tree kernel modules ──────────────────────────────
 # Build Broadcom WiFi (akmod-wl) and FaceTimeHD camera (akmod-facetimehd)
 # in an isolated builder so build-only deps don't pollute the final image.
-FROM quay.io/fedora/fedora-bootc:44 AS builder
+ARG BASE_IMAGE=quay.io/fedora/fedora-bootc
+ARG FEDORA_VERSION=44
+
+FROM ${BASE_IMAGE}:${FEDORA_VERSION} AS builder
 
 RUN <<BUILDER
 set -euo pipefail
 
-echo "▸ Upgrading kernel packages"
-dnf5 upgrade -y 'kernel*' --refresh
-
-echo "▸ Installing kernel-devel and build tools"
-dnf5 -y install kernel-devel akmods wget git make gcc --refresh
-
-KERNEL_VERSION="$(rpm -q kernel-core --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')"
+# Build against the kernel shipped in the base image: the final stage keeps
+# that same kernel, so the modules must match it exactly.
+KERNEL_VERSION="$(ls /usr/lib/modules)"
 FEDORA_RELEASE="$(rpm -E '%fedora')"
 echo "▸ Detected kernel: ${KERNEL_VERSION}  (Fedora ${FEDORA_RELEASE})"
+
+echo "▸ Installing matching kernel-devel"
+if ! dnf5 -y install "kernel-devel-${KERNEL_VERSION}" --refresh; then
+    # The updates repo may already be ahead of the base image kernel
+    echo "▸ kernel-devel-${KERNEL_VERSION} not in repos, fetching from Koji"
+    KOJI_PATH="$(rpm -q kernel-core --queryformat '%{VERSION}/%{RELEASE}/%{ARCH}')"
+    dnf5 -y install "https://kojipkgs.fedoraproject.org/packages/kernel/${KOJI_PATH}/kernel-devel-${KERNEL_VERSION}.rpm"
+fi
+
+echo "▸ Installing build tools"
+dnf5 -y install akmods git make gcc
 
 # ── Broadcom WiFi (from RPMFusion Non-Free) ──
 echo "▸ Enabling RPMFusion Non-Free repository"
@@ -35,14 +45,8 @@ akmods --force --kernels "${KERNEL_VERSION}" --kmod wl
 # The COPR is kept only for the facetimehd-kmod-common userspace package;
 # the kernel module itself is compiled from upstream source below.
 echo "▸ Enabling COPR for facetimehd-kmod-common"
-# For Fedora >= 41 the COPR uses "rawhide" as the release identifier
-if [ "${FEDORA_RELEASE}" -ge 41 ]; then
-    COPR_RELEASE="rawhide"
-else
-    COPR_RELEASE="${FEDORA_RELEASE}"
-fi
 curl -LsSf -o /etc/yum.repos.d/_copr_mulderje-facetimehd-kmod.repo \
-    "https://copr.fedorainfracloud.org/coprs/mulderje/facetimehd-kmod/repo/fedora-${COPR_RELEASE}/mulderje-facetimehd-kmod-fedora-${COPR_RELEASE}.repo"
+    "https://copr.fedorainfracloud.org/coprs/mulderje/facetimehd-kmod/repo/fedora-${FEDORA_RELEASE}/mulderje-facetimehd-kmod-fedora-${FEDORA_RELEASE}.repo"
 
 echo "▸ Building FaceTimeHD kmod from source (patjak/facetimehd)"
 git clone --depth 1 https://github.com/patjak/facetimehd.git /tmp/facetimehd
@@ -58,7 +62,11 @@ cd /tmp/facetimehd-firmware && make && make install
 BUILDER
 
 # ── Stage 2: Final bootable image ──────────────────────────────────────────
-FROM quay.io/fedora/fedora-bootc:44
+FROM ${BASE_IMAGE}:${FEDORA_VERSION}
+
+LABEL org.opencontainers.image.title="bootc-fedora-gnome-macbookair" \
+      org.opencontainers.image.description="Immutable Fedora + GNOME bootc image for Intel MacBook Air" \
+      org.opencontainers.image.source="https://github.com/CleoMenezesJr/bootc-fedora-gnome-macbookair"
 
 # Copy pre-built kernel module RPMs from builder
 COPY --from=builder /var/cache/akmods/wl/kmod-wl*.rpm /tmp/kmods/
@@ -78,7 +86,7 @@ COPY post-install.service /usr/lib/systemd/user/post-install.service
 # ── MacBook keyboard: fn key behavior, swap alt/cmd ──
 COPY hid-apple.conf /usr/lib/modprobe.d/hid-apple.conf
 # ── Dracut: optimized initramfs (consolidates facetimehd + no-nfs) ──
-COPY dracut-optimize.conf /usr/lib/dracut/conf.d/macbook-optimize.conf
+COPY dracut-optimize.conf /usr/lib/dracut/dracut.conf.d/50-macbook-optimize.conf
 # ── Kernel modules: ensure coretemp + applesmc loaded at boot ──
 COPY modules-load.conf /usr/lib/modules-load.d/macbook.conf
 # ── Audio power save: Intel HDA codec off when idle ──
@@ -109,10 +117,13 @@ COPY --chmod=755 lid-wakeup-guard.sh /usr/bin/lid-wakeup-guard.sh
 COPY lid-wakeup-guard.service /usr/lib/systemd/system/lid-wakeup-guard.service
 # ── Udev: re-enable LID0 wakeup when lid opens ──
 COPY 93-lid-wakeup.rules /usr/lib/udev/rules.d/93-lid-wakeup.rules
+# ── Image signing: public key + fetch cosign signatures from GHCR ──
+COPY cosign.pub /etc/pki/containers/bootc-fedora-gnome-macbookair.pub
+COPY registries-sigstore.yaml /etc/containers/registries.d/bootc-fedora-gnome-macbookair.yaml
 # ── Fan control: custom mbpfan curve for A1466 ──
 COPY mbpfan.conf /etc/mbpfan.conf
 # ── Power management: tuned custom profile ──
-COPY tuned-macbook-profile/ /etc/tuned/macbook-profile/
+COPY tuned-macbook-profile/tuned.conf /usr/lib/tuned/profiles/macbook-profile/tuned.conf
 
 # ── System configuration & kernel module installation ──
 RUN <<SYSCONFIG
@@ -122,13 +133,14 @@ echo "▸ Creating required directories"
 mkdir -vp /var/roothome /data /var/home
 mkdir -vp /usr/lib/systemd/sleep.conf.d /usr/lib/systemd/logind.conf.d
 
-echo "▸ Installing kernel-modules-extra for broader hardware support"
-dnf5 -y install kernel-modules-extra --refresh
-
-# ── Dracut: optimized initramfs (config copied above as macbook-optimize.conf) ──
-echo "▸ Regenerating initramfs with optimized dracut config"
-kver="$(rpm -q kernel-core --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')"
-dracut -f "/usr/lib/modules/${kver}/initramfs.img" "${kver}"
+# Pin kernel-modules-extra to the image kernel: an unpinned install pulls the
+# newest kernel-core too, leaving two kernels in the image.
+kver="$(ls /usr/lib/modules)"
+echo "▸ Installing kernel-modules-extra-${kver}"
+if ! dnf5 -y install "kernel-modules-extra-${kver}" --refresh; then
+    KOJI_PATH="$(rpm -q kernel-core --queryformat '%{VERSION}/%{RELEASE}/%{ARCH}')"
+    dnf5 -y install "https://kojipkgs.fedoraproject.org/packages/kernel/${KOJI_PATH}/kernel-modules-extra-${kver}.rpm"
+fi
 
 # ── Kernel Arguments: ACPI OSI hacks for MacBook hardware ──
 # Declaring kernel arguments via bootc-native configuration files.
@@ -210,6 +222,27 @@ install -D /tmp/facetimehd.ko \
 depmod -a "${kver}"
 rm -f /tmp/facetimehd.ko
 
+# Fail the build early if the modules don't match the image kernel
+for mod in wl facetimehd; do
+    modinfo -k "${kver}" "${mod}" >/dev/null || {
+        echo "✗ Module ${mod} not available for kernel ${kver}" >&2
+        exit 1
+    }
+done
+
+# ── Initramfs: regenerated after modules, firmware and modprobe.d are in place ──
+echo "▸ Regenerating initramfs for ${kver}"
+DRACUT_NO_XATTR=1 dracut -vf "/usr/lib/modules/${kver}/initramfs.img" "${kver}"
+
+# ── Image signing: require a valid cosign signature for this repository ──
+# Only enforced after `bootc switch --enforce-container-sigverify`.
+jq '.transports.docker["ghcr.io/cleomenezesjr/bootc-fedora-gnome-macbookair"] = [{
+      "type": "sigstoreSigned",
+      "keyPath": "/etc/pki/containers/bootc-fedora-gnome-macbookair.pub",
+      "signedIdentity": {"type": "matchRepository"}
+    }]' /etc/containers/policy.json > /tmp/policy.json
+mv /tmp/policy.json /etc/containers/policy.json
+
 # ── Writable directories (bootc best practice) ──
 # See: https://bootc-dev.github.io/bootc/building/guidance.html
 echo "▸ Setting up writable /opt and /usr/local"
@@ -220,13 +253,6 @@ rm -rvf /usr/local && ln -vs /var/usrlocal /usr/local
 # ── Persistent journal ──
 mkdir -p /usr/lib/systemd/journald.conf.d
 printf '[Journal]\nStorage=persistent\n' > /usr/lib/systemd/journald.conf.d/persistent.conf
-
-# ── Composefs: read-only / with integrity verification (bootc best practice) ──
-mkdir -p /usr/lib/ostree
-cat > /usr/lib/ostree/prepare-root.conf <<'COMPOSEFS'
-[composefs]
-enabled = true
-COMPOSEFS
 
 # ── Timezone: Santiago, Chile ──
 echo "▸ Setting timezone to America/Santiago"
@@ -300,6 +326,10 @@ make install
 cp -v mbpfan.service /usr/lib/systemd/system/mbpfan.service
 cd /
 rm -rf /tmp/mbpfan
+
+# ── tuned-ppd: map GNOME's "Balanced" mode (AC and battery) to macbook-profile ──
+sed -i 's/^balanced=balanced\(-battery\)\?$/balanced=macbook-profile/' /etc/tuned/ppd.conf
+grep -c '^balanced=macbook-profile$' /etc/tuned/ppd.conf | grep -qx 2
 
 # ── GNOME system defaults via dconf ──
 echo "▸ Configuring GNOME system defaults"
@@ -389,7 +419,6 @@ systemctl enable \
  tuned.service \
  tuned-ppd.service \
  suspend-fix.service \
- zram-swap.service \
  wl-suspend.service \
  sleep-helpers.service \
  lid-wakeup-guard.service \
@@ -443,4 +472,4 @@ TMPFILES
 PACKAGES
 
 # ── Lint the final image ──
-RUN bootc container lint
+RUN bootc container lint --fatal-warnings

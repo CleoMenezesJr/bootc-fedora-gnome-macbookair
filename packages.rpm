@@ -36,7 +36,7 @@ usbutils
 gsl
 libconfig
 popt
-zram
+zram-generator-defaults
 zip
 
 # ── Input method support ───────────────────────────────────────────
