@@ -10,11 +10,8 @@ case "$1" in
  # Nothing needed before suspend
  ;;
  post)
- for uid in $(loginctl list-sessions --no-legend | awk '{print $2}'); do
- if [ -S "/run/user/$uid/systemd/private" ]; then
- sudo -u "#$uid" XDG_RUNTIME_DIR="/run/user/$uid" \
- systemctl --user restart macbook-lighter.service 2>/dev/null || true
- fi
+ for user in $(loginctl list-users --no-legend | awk '{print $2}'); do
+ systemctl --user --machine="${user}@.host" restart macbook-lighter.service 2>/dev/null || true
  done
  ;;
 esac

@@ -3,12 +3,19 @@
 
 [Unit]
 Description=Bootstrap user-level Flatpak applications on first login
-After=network-online.target
-Wants=network-online.target
+# post-install.sh creates this flag once every Flatpak is installed
+ConditionPathExists=!%h/.local/share/.flatpaks-bootstrapped
+StartLimitIntervalSec=2h
+StartLimitBurst=10
 
 [Service]
 Type=oneshot
+# network-online.target only exists in the system manager, so the user
+# instance waits for connectivity itself (WiFi often comes up after login).
+ExecStartPre=/usr/bin/nm-online -q -t 300
 ExecStart=/usr/bin/post-install.sh
+Restart=on-failure
+RestartSec=5min
 
 [Install]
 WantedBy=default.target
