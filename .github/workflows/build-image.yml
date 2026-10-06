@@ -11,38 +11,42 @@ on:
       - 'README.md'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  BUILD_IMAGE: localhost/bootc-build:latest
+  CHUNKED_IMAGE: localhost/bootc-chunked:latest
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Extract base image version
-        id: base_version
+      - name: Free disk space
         run: |
-          # Parse the final FROM line (skip builder stage) to get the base image tag
-          VERSION=$(grep '^FROM' Containerfile | tail -n 1 | awk -F: '{print $2}' | awk '{print $1}')
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          # Build image, its podman copy and the rechunked copy need ~20 GB
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h /
+
+      - name: Extract base image
+        id: base
+        run: |
+          echo "image=$(sed -n 's/^ARG BASE_IMAGE=//p' Containerfile)" >> "$GITHUB_OUTPUT"
+          echo "version=$(sed -n 's/^ARG FEDORA_VERSION=//p' Containerfile)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        uses: docker/setup-buildx-action@v4
 
       - name: Generate timestamp (Chile time)
         id: timestamp
@@ -50,23 +54,71 @@ jobs:
 
       - name: Extract image metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ steps.base_version.outputs.version }}-${{ steps.timestamp.outputs.date }}
-            type=raw,value=${{ steps.base_version.outputs.version }}-latest
+            type=raw,value=${{ steps.base.outputs.version }}-${{ steps.timestamp.outputs.date }}
+            type=raw,value=${{ steps.base.outputs.version }}-latest
             type=ref,event=branch
             type=sha,format=short
             latest
 
-      - name: Build and push image (full rebuild)
-        uses: docker/build-push-action@v5
+      - name: Build image (full rebuild)
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Containerfile
-          push: true
+          load: true
+          push: false
           pull: true
           no-cache: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ env.BUILD_IMAGE }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Rechunk image
+        run: |
+          # Split the image into reproducible, package-based layers so
+          # `bootc upgrade` only downloads what actually changed.
+          sudo podman pull "docker-daemon:${BUILD_IMAGE}"
+          docker rmi "${BUILD_IMAGE}"
+          sudo podman run --rm --privileged \
+            -v /var/lib/containers:/var/lib/containers \
+            "${{ steps.base.outputs.image }}:${{ steps.base.outputs.version }}" \
+            /usr/libexec/bootc-base-imagectl rechunk "${BUILD_IMAGE}" "${CHUNKED_IMAGE}"
+
+      - name: Push image
+        id: push
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          AUTH_FILE: ${{ runner.temp }}/auth/config.json
+        run: |
+          mkdir -p "$(dirname "${AUTH_FILE}")"
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            podman login --authfile "${AUTH_FILE}" "${REGISTRY}" -u "${{ github.actor }}" --password-stdin
+          while read -r tag; do
+            if [ -n "${tag}" ]; then
+              sudo podman push --authfile "${AUTH_FILE}" --digestfile digest "${CHUNKED_IMAGE}" "docker://${tag}"
+            fi
+          done <<< "${TAGS}"
+          echo "digest=$(cat digest)" >> "$GITHUB_OUTPUT"
+
+      - name: Sign image
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          COSIGN_PASSWORD: ''
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          if [ -z "${COSIGN_PRIVATE_KEY}" ]; then
+            echo "::warning::SIGNING_SECRET is not set, image was pushed unsigned"
+            exit 0
+          fi
+          IMAGE="$(echo "${REGISTRY}/${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')"
+          # cosign v2: v3 defaults to the new bundle format, which
+          # containers/image (used by bootc) can't verify yet
+          # --user 0 maps to the runner user, so the 0600 auth file stays readable
+          podman run --rm --user 0 \
+            -e COSIGN_PRIVATE_KEY -e COSIGN_PASSWORD -e DOCKER_CONFIG=/auth \
+            -v "${{ runner.temp }}/auth:/auth:ro" \
+            ghcr.io/sigstore/cosign/cosign:v2.6.1 \
+            sign --yes --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"
