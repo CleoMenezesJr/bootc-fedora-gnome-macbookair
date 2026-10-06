@@ -1,4 +1,0 @@
-# Tell containers/image to fetch cosign signatures stored next to the image
-docker:
-  ghcr.io/cleomenezesjr/bootc-fedora-gnome-macbookair:
-    use-sigstore-attachments: true

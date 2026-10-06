@@ -88,7 +88,6 @@ jobs:
             /usr/libexec/bootc-base-imagectl rechunk "${BUILD_IMAGE}" "${CHUNKED_IMAGE}"
 
       - name: Push image
-        id: push
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
           AUTH_FILE: ${{ runner.temp }}/auth/config.json
@@ -98,27 +97,6 @@ jobs:
             podman login --authfile "${AUTH_FILE}" "${REGISTRY}" -u "${{ github.actor }}" --password-stdin
           while read -r tag; do
             if [ -n "${tag}" ]; then
-              sudo podman push --authfile "${AUTH_FILE}" --digestfile digest "${CHUNKED_IMAGE}" "docker://${tag}"
+              sudo podman push --authfile "${AUTH_FILE}" "${CHUNKED_IMAGE}" "docker://${tag}"
             fi
           done <<< "${TAGS}"
-          echo "digest=$(cat digest)" >> "$GITHUB_OUTPUT"
-
-      - name: Sign image
-        env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-          COSIGN_PASSWORD: ''
-          DIGEST: ${{ steps.push.outputs.digest }}
-        run: |
-          if [ -z "${COSIGN_PRIVATE_KEY}" ]; then
-            echo "::warning::SIGNING_SECRET is not set, image was pushed unsigned"
-            exit 0
-          fi
-          IMAGE="$(echo "${REGISTRY}/${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')"
-          # cosign v2: v3 defaults to the new bundle format, which
-          # containers/image (used by bootc) can't verify yet
-          # --user 0 maps to the runner user, so the 0600 auth file stays readable
-          podman run --rm --user 0 \
-            -e COSIGN_PRIVATE_KEY -e COSIGN_PASSWORD -e DOCKER_CONFIG=/auth \
-            -v "${{ runner.temp }}/auth:/auth:ro" \
-            ghcr.io/sigstore/cosign/cosign:v2.6.1 \
-            sign --yes --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"

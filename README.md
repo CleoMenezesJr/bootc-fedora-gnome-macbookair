@@ -31,9 +31,7 @@ Immutable Fedora 44 image with GNOME Shell, tailored for MacBook Air hardware. A
 | `dracut-optimize.conf` | Initramfs tuning: FaceTimeHD firmware, early drivers, no NFS |
 | `suspend-fix.service` | Fixes MacBook spurious wakeup from suspend |
 | `tuned-macbook-profile/` | Custom tuned profile used by GNOME's "Balanced" power mode |
-| `cosign.pub` | Public key used to verify image signatures |
-| `registries-sigstore.yaml` | Makes containers/image fetch cosign signatures from GHCR |
-| `.github/workflows/build-image.yml` | Daily CI/CD build (02:00 UTC), rechunked and signed |
+| `.github/workflows/build-image.yml` | Daily CI/CD build (02:00 UTC), rechunked for small updates |
 
 ## MacBook-Specific Features
 
@@ -109,16 +107,6 @@ sudo bootc rollback
 # Switch to this image (if already on bootc)
 sudo bootc switch ghcr.io/CleoMenezesJr/bootc-fedora-gnome-macbookair:latest
 ```
-
-## Image Signing
-
-Every image pushed by CI is signed with [cosign](https://github.com/sigstore/cosign), and the image ships the public key (`cosign.pub`) plus a `policy.json` rule for this repository. Once you're running this image, turn on verification so `bootc upgrade` refuses any image that wasn't signed by this repo's CI:
-
-```bash
-sudo bootc switch --enforce-container-sigverify ghcr.io/cleomenezesjr/bootc-fedora-gnome-macbookair:latest
-```
-
-CI signs with the `SIGNING_SECRET` repository secret (the contents of `cosign.key`, which is never committed). Without it, images are pushed unsigned and the build logs a warning.
 
 ## Rebasing from Fedora Atomic (Silverblue/Kinoite)
 

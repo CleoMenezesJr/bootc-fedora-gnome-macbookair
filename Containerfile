@@ -117,9 +117,6 @@ COPY --chmod=755 lid-wakeup-guard.sh /usr/bin/lid-wakeup-guard.sh
 COPY lid-wakeup-guard.service /usr/lib/systemd/system/lid-wakeup-guard.service
 # ── Udev: re-enable LID0 wakeup when lid opens ──
 COPY 93-lid-wakeup.rules /usr/lib/udev/rules.d/93-lid-wakeup.rules
-# ── Image signing: public key + fetch cosign signatures from GHCR ──
-COPY cosign.pub /etc/pki/containers/bootc-fedora-gnome-macbookair.pub
-COPY registries-sigstore.yaml /etc/containers/registries.d/bootc-fedora-gnome-macbookair.yaml
 # ── Fan control: custom mbpfan curve for A1466 ──
 COPY mbpfan.conf /etc/mbpfan.conf
 # ── Power management: tuned custom profile ──
@@ -233,15 +230,6 @@ done
 # ── Initramfs: regenerated after modules, firmware and modprobe.d are in place ──
 echo "▸ Regenerating initramfs for ${kver}"
 DRACUT_NO_XATTR=1 dracut -vf "/usr/lib/modules/${kver}/initramfs.img" "${kver}"
-
-# ── Image signing: require a valid cosign signature for this repository ──
-# Only enforced after `bootc switch --enforce-container-sigverify`.
-jq '.transports.docker["ghcr.io/cleomenezesjr/bootc-fedora-gnome-macbookair"] = [{
-      "type": "sigstoreSigned",
-      "keyPath": "/etc/pki/containers/bootc-fedora-gnome-macbookair.pub",
-      "signedIdentity": {"type": "matchRepository"}
-    }]' /etc/containers/policy.json > /tmp/policy.json
-mv /tmp/policy.json /etc/containers/policy.json
 
 # ── Writable directories (bootc best practice) ──
 # See: https://bootc-dev.github.io/bootc/building/guidance.html
