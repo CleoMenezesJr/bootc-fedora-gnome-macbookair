@@ -233,10 +233,12 @@ DRACUT_NO_XATTR=1 dracut -vf "/usr/lib/modules/${kver}/initramfs.img" "${kver}"
 
 # ── Writable directories (bootc best practice) ──
 # See: https://bootc-dev.github.io/bootc/building/guidance.html
+# Symlinks must be relative: `bootc container lint` resolves them inside the
+# image root and fails on absolute targets (runtime-deps lint).
 echo "▸ Setting up writable /opt and /usr/local"
-rm -rvf /opt && mkdir -vp /var/opt && ln -vs /var/opt /opt
+rm -rvf /opt && mkdir -vp /var/opt && ln -vs var/opt /opt
 mkdir -vp /var/usrlocal && mv -v /usr/local/* /var/usrlocal/ 2>/dev/null || true
-rm -rvf /usr/local && ln -vs /var/usrlocal /usr/local
+rm -rvf /usr/local && ln -vs ../var/usrlocal /usr/local
 
 # ── Persistent journal ──
 mkdir -p /usr/lib/systemd/journald.conf.d
